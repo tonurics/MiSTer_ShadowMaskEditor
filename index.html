@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>MiSTer - Shadow Mask Editor</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+	<style type="text/css">
+		html,body{
+			height:100%;
+			margin:0px;
+			padding:0px;
+			font-family:sans-serif;
+			font-size:100%;
+		}
+		label{
+			width:50px;
+			display:inline-block;
+			text-align:right;
+			padding-right:0.25em;
+		}
+		body>h1,body>h2{
+			margin:0px;
+			padding:0.25em;
+		}
+		body>h1{
+			font-size:120%;
+			background-color:darkgrey;
+		}
+		body>h2{
+			font-size:110%;
+			background-color:lightgrey;
+		}
+		body>div{
+			background-color:lightgrey;
+			padding:0px 0.5em 0.5em 0.5em;
+			border-bottom:1px solid rgba(0,0,0,0.25);
+		}
+		body>div button{
+			width:32px;
+			height:32px;
+			border:5px solid rgba(0,0,0,0);
+		}
+		#mask>div{
+			display:block;
+			padding:0px;
+			margin:0px;
+			line-height:0px;
+			box-sizing:border-box;
+		}
+		#mask>div>div{
+			width:32px;
+			height:32px;
+			border:1px solid #000;
+			display:inline-block;
+		}
+		textarea{
+			display:block;
+			margin:auto;
+			width:99%;
+			height:300px;
+		}
+	</style>
+	<script type="text/javascript">
+		var mask_editor={
+			color:'white',
+			pixels:{},
+			map:{
+				grey:0,
+				blue:1,
+				green:2,
+				cyan:3,
+				red:4,
+				magenta:5,
+				yellow:6,
+				white:7,
+			},
+			init:function(){
+				document.getElementById('width').addEventListener('change',mask_editor.resize);
+				document.getElementById('height').addEventListener('change',mask_editor.resize);
+				var buttons=document.getElementsByTagName('BUTTON');
+				var i=buttons.length;
+				while(i--){
+					buttons[i].addEventListener('click',mask_editor.colorGet);
+				}
+				mask_editor.resize();
+			},
+			resize:function(){
+				var p=document.getElementById('mask');
+				while(p.firstChild){
+					p.removeChild(p.firstChild);
+				}
+				var row={};
+				mask_editor.pixels={};
+				for(let h=0;h<document.getElementById('height').value;h++){
+					row[h]=document.createElement('div');
+					if(!mask_editor.pixels.hasOwnProperty(h)){
+						mask_editor.pixels[h]={};
+					}
+					for(let w=0;w<document.getElementById('width').value;w++){
+						mask_editor.pixels[h][w]=document.createElement('div');
+						mask_editor.pixels[h][w].addEventListener('click',mask_editor.colorSet);
+						mask_editor.pixels[h][w].style.backgroundColor=mask_editor.color;
+						row[h].appendChild(mask_editor.pixels[h][w]);
+					}
+					p.appendChild(row[h]);
+				}
+				mask_editor.write();
+			},
+			colorGet:function(e){
+				var buttons=document.getElementsByTagName('BUTTON');
+				var i=buttons.length;
+				while(i--){
+					buttons[i].style.borderColor='rgba(0,0,0,0)';
+				}
+				mask_editor.color=e.target.style.backgroundColor;
+				e.target.style.borderColor='#000';
+			},
+			colorSet:function(e){
+				e.target.style.backgroundColor=mask_editor.color;
+				mask_editor.write();
+			},
+			write:function(){
+ 				output=[document.getElementById('width').value+','+document.getElementById('height').value,''];
+				for(row of Object.values(mask_editor.pixels)){
+					var line=[];
+					for(pixel of Object.values(row)){
+						line.push(mask_editor.map[pixel.style.backgroundColor]);
+						console.log();
+					}
+					output.push(line.join(','));
+				}
+				document.getElementById('output').value=output.join("\n");
+			},
+		};
+		window.addEventListener('load',function(){
+			mask_editor.init();
+		},false);
+	</script>
+</head>
+<body>
+	<h1>MiSTer - Shadow Mask Editor</h1>
+	<h2>Properties</h2>
+	<div>
+		<div>
+			<label for="width">Width</label><input type="number" min="1" max="100" value="1" step="1" id="width">
+		</div>
+		<div>
+			<label for="height">Height</label><input type="number" min="1" max="100" value="1" step="1" id="height">
+		</div>
+	</div>
+	<h2>Color Palette</h2>
+	<div>
+		<button style="background-color:grey;"></button>
+		<button style="background-color:blue;"></button>
+		<button style="background-color:green;"></button>
+		<button style="background-color:cyan;"></button>
+		<button style="background-color:red;"></button>
+		<button style="background-color:magenta;"></button>
+		<button style="background-color:yellow;"></button>
+		<button style="background-color:white;border:5px solid #000;"></button>
+	</div>
+	<h2>Mask</h2>
+	<div>
+		<div id="mask"></div>
+	</div>
+	<h2>Mask Definition</h2>
+	<div>
+		<textarea id="output"></textarea>
+	<div>
+</body>
+</html>
