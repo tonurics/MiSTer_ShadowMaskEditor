@@ -6,130 +6,565 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 	<style type="text/css">
 		html,body{
+			background-color:#454545;
+			color:#eee;
+			font-family:sans-serif;
+			font-size:100%;
 			height:100%;
 			margin:0px;
 			padding:0px;
-			font-family:sans-serif;
-			font-size:100%;
-		}
-		label{
-			width:50px;
-			display:inline-block;
-			text-align:right;
-			padding-right:0.25em;
 		}
 		body>h1,body>h2{
 			margin:0px;
 			padding:0.25em;
 		}
 		body>h1{
+			background-color:#303030;
 			font-size:120%;
-			background-color:darkgrey;
 		}
-		body>h2{
+		body h2{
 			font-size:110%;
-			background-color:lightgrey;
+			margin:0.25em;
 		}
 		body>div{
-			background-color:lightgrey;
-			padding:0px 0.5em 0.5em 0.5em;
 			border-bottom:1px solid rgba(0,0,0,0.25);
+			padding:0px 0.5em 0.5em 0.5em;
 		}
-		body>div button{
-			width:32px;
+		label{
+			display:inline-block;
+			padding-right:0.25em;
+			text-align:right;
+			width:50px;
+		}
+		button{
+			border:0px solid #000;
+			cursor:pointer;
+			text-align:center;
+		}
+		button svg{margin:auto;}
+		input[type=number]{width:75px;}
+		textarea{
+			background-color:#303030;
+			border:1px solid #000;
+			color:#fff;
+			height:350px;
+			margin:auto;
+			width:550px;
+		}
+		.tools button,.intensityTools button{
+			background-color:hsl(0,0%,65%);
+			border-radius:3px;
 			height:32px;
-			border:5px solid rgba(0,0,0,0);
+			padding:4px;
+			width:32px;
+		}
+		.tools button.active{background-color:hsl(0,0%,90%);}
+		.palette td{
+			border:1px solid transparent;
+			padding:0px;
+		}
+		.palette td.active{border:1px solid #fff;}
+		.palette button{
+			height:32px;
+			width:32px;
+		}
+		.palette button div{
+			display:inline-block;
+			height:16px;
+			width:16px;
+		}
+		.previewType label,.backgroundType label{width:auto;}
+		.intensity{display:inline-block;}
+		.intensity div{
+			font-size:75%;
+			text-align:right;
+			color:#000;
+		}
+		.intensityTools{display:inline-block;}
+		.preview canvas{
+			border:1px solid #000;
+			height:300px;
+			width:300px;
+		}
+		.help table{border-collapse:collapse;}
+		.help table th,.help table td{
+			border:1px solid #000;
+			padding:0.25em;
+		}
+		.help table caption{font-weight:bold;}
+		.help table td:nth-last-child(-n+2){
+			text-align:center;
 		}
 		#mask>div{
-			display:block;
-			padding:0px;
-			margin:0px;
-			line-height:0px;
 			box-sizing:border-box;
+			display:block;
+			line-height:0px;
+			margin:0px;
+			padding:0px;
 		}
 		#mask>div>div{
-			width:32px;
+			border:1px solid #000;
+			cursor:pointer;
+			display:inline-block;
 			height:32px;
+			width:32px;
+		}
+		#mask>div>div>div{
+			height:16px;
+			width:16px;
+			margin:8px 8px;
+		}
+		#activeColor{
 			border:1px solid #000;
 			display:inline-block;
+			height:64px;
+			width:64px;
 		}
-		textarea{
-			display:block;
-			margin:auto;
-			width:99%;
-			height:300px;
+		#activeColor div{
+			height:32px;
+			width:32px;
+			margin:16px 16px;
 		}
+		#backgroundRainbowColors{width:40px;}
 	</style>
 	<script type="text/javascript">
 		var mask_editor={
-			color:'white',
-			pixels:{},
-			map:{
-				grey:0,
-				blue:1,
-				green:2,
-				cyan:3,
-				red:4,
-				magenta:5,
-				yellow:6,
-				white:7,
-			},
+			toolActive:'pencil',
 			init:function(){
-				document.getElementById('width').addEventListener('change',mask_editor.resize);
-				document.getElementById('height').addEventListener('change',mask_editor.resize);
-				var buttons=document.getElementsByTagName('BUTTON');
-				var i=buttons.length;
-				while(i--){
-					buttons[i].addEventListener('click',mask_editor.colorGet);
-				}
-				mask_editor.resize();
+				mask_editor.canvas={
+					_:document.getElementById('previewCanvas').getContext('2d',{alpha:false}),
+				};
+				mask_editor.backgroundReset();
+				Array.prototype.map.call(document.querySelectorAll('.properties input'),function(e){
+					e.addEventListener('change',mask_editor.maskResize);
+				});
+				Array.prototype.map.call(document.querySelectorAll('.previewType input'),function(e){
+					e.addEventListener('change',mask_editor.previewRender);
+				});
+				Array.prototype.map.call(document.querySelectorAll('.backgroundType input'),function(e){
+					e.addEventListener('change',mask_editor.backgroundChange);
+				});
+				document.getElementById('backgroundRainbowColors').addEventListener('change',mask_editor.backgroundChange);
+				document.getElementById('rotate').addEventListener('change',mask_editor.previewRender);
+				document.getElementsByName('backgroundFile')[0].addEventListener('change',mask_editor.backgroundLoad);
+				Array.prototype.map.call(document.querySelectorAll('.tools button'),function(e){
+					e.addEventListener('click',mask_editor.toolClick);
+				});
+				Array.prototype.map.call(document.querySelectorAll('.palette button'),function(e){
+					e.addEventListener('click',mask_editor.paletteClick);
+				});
+				Array.prototype.map.call(document.querySelectorAll('.intensity input'),function(e){
+					e.addEventListener('change',mask_editor.intensityChange);
+					e.addEventListener('input',mask_editor.intensityInput);
+				});
+				Array.prototype.map.call(document.querySelectorAll('.intensityTools button'),function(e){
+					e.addEventListener('click',mask_editor.intensityToolClick);
+				});
+				Array.prototype.map.call(document.querySelectorAll('.preview input'),function(e){
+					e.addEventListener('change',mask_editor.previewResize);
+				});
+				document.getElementsByName('maskFile')[0].addEventListener('change',mask_editor.maskLoad);
+				mask_editor.maskResize();
 			},
-			resize:function(){
-				var p=document.getElementById('mask');
-				while(p.firstChild){
-					p.removeChild(p.firstChild);
-				}
-				var row={};
-				mask_editor.pixels={};
-				for(let h=0;h<document.getElementById('height').value;h++){
-					row[h]=document.createElement('div');
-					if(!mask_editor.pixels.hasOwnProperty(h)){
-						mask_editor.pixels[h]={};
-					}
-					for(let w=0;w<document.getElementById('width').value;w++){
-						mask_editor.pixels[h][w]=document.createElement('div');
-						mask_editor.pixels[h][w].addEventListener('click',mask_editor.colorSet);
-						mask_editor.pixels[h][w].style.backgroundColor=mask_editor.color;
-						row[h].appendChild(mask_editor.pixels[h][w]);
-					}
-					p.appendChild(row[h]);
-				}
-				mask_editor.write();
+			backgroundChange:function(){
+				mask_editor.backgroundReset();
+				mask_editor.previewRender();
 			},
-			colorGet:function(e){
-				var buttons=document.getElementsByTagName('BUTTON');
-				var i=buttons.length;
-				while(i--){
-					buttons[i].style.borderColor='rgba(0,0,0,0)';
+			backgroundReset:function(){
+				mask_editor.canvas['bg']=document.createElement('canvas');
+				mask_editor.canvas['bg'].width=document.getElementById('previewCanvas').width;
+				mask_editor.canvas['bg'].height=document.getElementById('previewCanvas').height;
+				mask_editor.canvas['bg'].style.width=document.getElementById('previewCanvas').style.width;
+				mask_editor.canvas['bg'].style.height=document.getElementById('previewCanvas').style.height;
+				mask_editor.canvas['bg']=mask_editor.canvas['bg'].getContext('2d',{alpha:false});
+				switch(document.querySelector('input[name="background"]:checked').value){
+					case 'none':
+						mask_editor.canvas['bg'].fillStyle='hsl(0,0%,50%)';
+						mask_editor.canvas['bg'].fillRect(0,0,document.getElementById('previewCanvas').width,document.getElementById('previewCanvas').height);
+					break;
+					case 'rainbow':
+						var pattern=document.createElement('canvas');
+						pattern.width=document.getElementById('previewCanvas').width;
+						pattern.height=document.getElementById('previewCanvas').width;
+						var ctx=pattern.getContext('2d',{alpha:false});
+						ctx.createImageData(pattern.height,pattern.width);
+						document.getElementById('backgroundRainbowColors').value=Math.max(1,Math.min(128,document.getElementById('backgroundRainbowColors').value));
+						var size=(document.getElementById('previewCanvas').width/document.getElementById('backgroundRainbowColors').value);
+						for(i=0;i<document.getElementById('backgroundRainbowColors').value;++i){
+							switch(i%3){
+								case 0:
+									ctx.fillStyle='hsl('+(i*size)+',100%,47.5%)';
+								break;
+								case 1:
+									ctx.fillStyle='hsl('+((i-1)*size)+',100%,65%)';
+								break;
+								default:
+									ctx.fillStyle='hsl('+((i-2)*size)+',100%,30%)';
+								break;
+							}
+							for(a=0;a<document.getElementById('backgroundRainbowColors').value;++a){
+								ctx.fillRect(Math.ceil(((i*size)+(a*size)))%document.getElementById('previewCanvas').width,Math.ceil(a*size),Math.ceil(size),Math.ceil(size));
+							}
+						}
+						mask_editor.canvas['bg'].rect(0,0,document.getElementById('previewCanvas').width,document.getElementById('previewCanvas').height);
+						mask_editor.canvas['bg'].fillStyle=mask_editor.canvas['bg'].createPattern(pattern,'repeat');
+						mask_editor.canvas['bg'].fill();
+					break;
+					case 'image':
+						mask_editor.canvas['bg'].drawImage(mask_editor.backgroundImage,0,0);
+					break;
 				}
-				mask_editor.color=e.target.style.backgroundColor;
-				e.target.style.borderColor='#000';
 			},
-			colorSet:function(e){
-				e.target.style.backgroundColor=mask_editor.color;
-				mask_editor.write();
+			backgroundLoad:function(e){
+				const reader=new FileReader();
+				reader.addEventListener('load',function(){
+					mask_editor.backgroundImage=new Image;
+					mask_editor.backgroundImage.src=reader.result;
+					mask_editor.backgroundImage.onload=function(){
+						if(document.getElementById('resizePreview').checked){
+							document.getElementById('previewWidth').value=this.width;
+							document.getElementById('previewHeight').value=this.height;
+							mask_editor.previewResize();
+						}
+						if(document.querySelector('input[name="background"]:checked').value=='image'){
+							mask_editor.canvas['bg'].drawImage(this,0,0);
+							mask_editor.previewRender();
+						}
+					};
+				},false);
+				if(e.target.files[0]){
+					reader.readAsDataURL(e.target.files[0]);
+				}
 			},
-			write:function(){
- 				output=[document.getElementById('width').value+','+document.getElementById('height').value,''];
-				for(row of Object.values(mask_editor.pixels)){
+			colorHSL:function(e){
+				var intensity=e.dataset.intensity.split(',').map(function(e){return parseFloat(e);});
+				var on=((((intensity[1]-100)/100)*50)+50),off=((intensity[0]/100)*50);
+				switch(e.dataset.bits){
+					case '000':
+						e.style.backgroundColor='hsl(0,0%,'+off+'%)';
+						e.childNodes[0].style.backgroundColor='hsl(0,0%,46.875%)';
+					break;
+					case '111':
+						e.style.backgroundColor='hsl(0,0%,'+on+'%)';
+						e.childNodes[0].style.backgroundColor='hsl(0,0%,46.875%)';
+					break;
+					default:
+						var hues={'000':0,'001':240,'010':120,'011':180,'100':0,'101':300,'110':60,'111':0,};
+						e.style.backgroundColor='hsl('+hues[e.dataset.bits]+',100%,'+on+'%)';
+						e.childNodes[0].style.backgroundColor='hsl('+hues[String(e.dataset.bits^111).padStart(3,'0')]+',100%,'+off+'%)';
+					break;
+				}
+			},
+			paletteClick:function(e){
+				var n=e.target;
+				while(n.tagName.toLowerCase()!='button'){
+					n=n.parentNode;
+				}
+				mask_editor.maskSet(n,document.getElementById('activeColor'));
+			},
+			intensityChange:function(){
+				Array.prototype.map.call(document.querySelectorAll('.palette button,#activeColor'),function(e){
+					e.dataset.intensity=[document.getElementById('intensityOff').value,document.getElementById('intensityOn').value];
+					mask_editor.colorHSL(e);
+				});
+			},
+			intensityInput:function(e){
+				e.target.nextElementSibling.innerHTML=e.target.value;
+			},
+			intensityToolClick:function(e){
+				var n=e.target;
+				while(n.tagName.toLowerCase()!='button'){
+					n=n.parentNode;
+				}
+				switch(n.name){
+					case 'half':
+						document.getElementById('intensityOn').value=((parseFloat(document.getElementById('intensityOn').value)-100)*0.5)+100;
+						document.getElementById('intensityOff').value=((93.75-parseFloat(document.getElementById('intensityOff').value))*0.5)+parseFloat(document.getElementById('intensityOff').value);
+					break;
+					case 'plus':
+						document.getElementById('intensityOn').value=parseFloat(document.getElementById('intensityOn').value)+6.25;
+						document.getElementById('intensityOff').value=parseFloat(document.getElementById('intensityOff').value)-6.25;
+					break;
+					case 'minus':
+						document.getElementById('intensityOn').value=parseFloat(document.getElementById('intensityOn').value)-6.25;
+						document.getElementById('intensityOff').value=parseFloat(document.getElementById('intensityOff').value)+6.25;
+					break;
+					case 'reset':
+						document.getElementById('intensityOn').value=112.5;
+						document.getElementById('intensityOff').value=62.5;
+					break;
+					case 'invert':
+						var off=(parseFloat(document.getElementById('intensityOn').value)-100),on=(parseFloat(document.getElementById('intensityOff').value)+100);
+						document.getElementById('intensityOn').value=on;
+						document.getElementById('intensityOff').value=off;
+					break;
+				}
+				document.getElementById('intensityOn').dispatchEvent(new Event('input'));
+				document.getElementById('intensityOff').dispatchEvent(new Event('input'));
+				mask_editor.intensityChange();
+			},
+			maskClick:function(e){
+				n=e.target;
+				if(!n.dataset.hasOwnProperty('bits')){
+					n=n.parentNode;
+				}
+				switch(mask_editor.toolActive){
+					case 'pencil':
+						mask_editor.maskSet(document.getElementById('activeColor'),n);
+					break;
+					case 'eraser':
+						n.dataset.bits='111';
+						n.dataset.code=7;
+						n.dataset.intensity=[62.5,112.5];
+						n.style.backgroundColor='hsl(0,0%,56.25%)';
+						n.childNodes[0].style.backgroundColor='hsl(0,0%,46.875%)';
+					break;
+					case 'fill':
+						var code=n.dataset.code,intensity=n.dataset.intensity;
+						Array.prototype.map.call(document.querySelectorAll('#mask>div>div'),function(e){
+							if(
+								e.dataset.code==code&&
+								e.dataset.intensity==intensity
+							){
+								mask_editor.maskSet(document.getElementById('activeColor'),e);
+							}
+						});
+					break;
+					case 'dropper':
+						mask_editor.maskSet(n,document.getElementById('activeColor'));
+						var intensity=n.dataset.intensity.split(',');
+ 						document.getElementById('intensityOn').value=parseFloat(intensity[1]);
+ 						document.getElementById('intensityOff').value=parseFloat(intensity[0]);
+ 						document.getElementById('intensityOn').dispatchEvent(new Event('input'));
+						document.getElementById('intensityOff').dispatchEvent(new Event('input'));
+ 						mask_editor.intensityChange();
+					break;
+				}
+				mask_editor.maskExport();
+			},
+			maskExport:function(){
+				var output=[
+					'v2',
+					'',
+					[
+						document.getElementById('maskWidth').value,
+						document.getElementById('maskHeight').value,
+					].join(','),
+					'',
+				];
+				for(const [y,row] of Object.entries(mask_editor.mask)){
 					var line=[];
-					for(pixel of Object.values(row)){
-						line.push(mask_editor.map[pixel.style.backgroundColor]);
-						console.log();
+					for(const [x,pixel] of Object.entries(row)){
+						var intensity=pixel.dataset.intensity.split(',').map(function(e){return parseFloat(e);});
+						line.push(pixel.dataset.code+((intensity[1]-100)/6.25).toString(16)+(intensity[0]/6.25).toString(16));
 					}
 					output.push(line.join(','));
 				}
 				document.getElementById('output').value=output.join("\n");
+				mask_editor.previewRender();
+			},
+			maskLoad:function(e){
+				const reader=new FileReader();
+				reader.addEventListener('load',function(){
+					var count=0,intensity=[
+						[62.5,112.5],
+						[62.5,112.5],
+					],previewType=document.querySelector('input[name="preview"]:checked').value,version='1.0';
+					if(document.querySelector('input[name="preview"]:checked').value!='simple'){
+						document.getElementById('previewSimple').checked=true;
+					}
+					reader.result.split('\n').forEach(function(line){
+						line=line.trim();
+						if(
+							line==''||
+							line.charAt(0)=='#'
+						){
+							return;
+						}
+						if(line=='v2'){
+							version='2.0';
+							return;
+						}
+						++count;
+						line=line.split(',');
+						if(count==1){
+							line[0]=Math.max(1,parseInt(line[0]));
+							line[1]=Math.max(1,parseInt(line[1]));
+							if(
+								document.getElementById('maskWidth').value!=line[0]||
+								document.getElementById('maskHeight').value!=line[1]
+							){
+								document.getElementById('maskWidth').value=line[0];
+								document.getElementById('maskHeight').value=line[1];
+								mask_editor.maskResize();
+							}
+							if(line.length>2){
+								intensity[0][1]=parseFloat(line[2]);
+								intensity[0][0]=parseFloat(line[3]);
+								if(line.length>4){
+									intensity[1][1]=intensity[0][1];
+									intensity[1][0]=intensity[0][0];
+									intensity[0][1]=parseFloat(line[4]);
+									intensity[0][0]=parseFloat(line[5]);
+								}else{
+									intensity[1][1]=intensity[0][1];
+									intensity[1][0]=intensity[0][0];
+								}
+								if(intensity[0][1]>=100){
+									version='1.3';
+								}else{
+									version='1.1';
+									intensity[0][1]+=100;
+									intensity[1][1]+=100;
+								}
+							}
+							return;
+						}
+						var bits={
+							0:'000',1:'001',2:'010',3:'011',4:'100',5:'101',6:'110',7:'111',
+						},column=0;
+						line.forEach(function(location){
+							switch(version){
+								case '1.0':
+								case '1.1':
+								case '1.3':
+									var map={
+										'0':0,'1':1,'2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,
+										'9':9,'10':10,'11':11,'12':12,'13':13,'14':14,'15':15,
+										'K':0,'B':1,'G':2,'C':3,'R':4,'M':5,'Y':6,'W':7,'k':8,
+										'b':9,'g':10,'c':11,'r':12,'m':13,'y':14,'w':15,
+									},set=0;
+									location=map[location];
+									if(location>8){
+										location-=8;
+										set=1;
+									}
+									mask_editor.mask[count-2][column].dataset.code=location;
+									mask_editor.mask[count-2][column].dataset.bits=bits[location];
+									mask_editor.mask[count-2][column].dataset.intensity=intensity[set];
+									mask_editor.colorHSL(mask_editor.mask[count-2][column]);
+								break;
+								case '2.0':
+									location=location.split('');
+									location[0]=parseInt(location[0]);
+									location[1]=parseInt(location[1],16);
+									location[2]=parseInt(location[2],16);
+									mask_editor.mask[count-2][column].dataset.code=location[0];
+									mask_editor.mask[count-2][column].dataset.bits=bits[location[0]];
+									mask_editor.mask[count-2][column].dataset.intensity=[(location[2]*6.25),((location[1]*6.25)+100)];
+									mask_editor.colorHSL(mask_editor.mask[count-2][column]);
+								break;
+							}
+							++column;
+						});
+					});
+					if(previewType=='accurate'){
+						document.getElementById('previewAccurate').checked=true;
+					}
+					mask_editor.maskExport();
+				});
+				if(e.target.files[0]){
+					reader.readAsText(e.target.files[0]);
+				}
+			},
+			maskResize:function(){
+				var p=document.getElementById('mask');
+				while(p.firstChild){
+					p.removeChild(p.firstChild);
+				}
+				Array.prototype.map.call(document.querySelectorAll('.properties input'),function(e){
+					e.value=Math.min(16,e.value);
+				});
+				var row={};
+				mask_editor.mask={};
+				for(let h=0;h<document.getElementById('maskHeight').value;h++){
+					row[h]=document.createElement('div');
+					if(!mask_editor.mask.hasOwnProperty(h)){
+						mask_editor.mask[h]={};
+					}
+					for(let w=0;w<document.getElementById('maskWidth').value;w++){
+						mask_editor.mask[h][w]=document.createElement('div');
+						mask_editor.mask[h][w].addEventListener('click',mask_editor.maskClick);
+						mask_editor.mask[h][w].appendChild(document.createElement('div'));
+						mask_editor.maskSet(document.getElementById('activeColor'),mask_editor.mask[h][w]);
+						row[h].appendChild(mask_editor.mask[h][w]);
+					}
+					p.appendChild(row[h]);
+				}
+				mask_editor.maskExport();
+			},
+			maskSet:function(src,dst){
+				dst.dataset.bits=src.dataset.bits;
+				dst.dataset.code=src.dataset.code;
+				dst.dataset.intensity=src.dataset.intensity;
+				dst.style.backgroundColor=src.style.backgroundColor;
+				dst.childNodes[0].style.backgroundColor=src.childNodes[0].style.backgroundColor;
+			},
+			previewRender:function(){
+				switch(document.querySelector('input[name="preview"]:checked').value){
+					case 'simple':
+						var mask=document.createElement('canvas');
+						if(document.getElementById('rotate').checked){
+							mask.width=document.getElementById('maskHeight').value;
+							mask.height=document.getElementById('maskWidth').value;
+						}else{
+							mask.width=document.getElementById('maskWidth').value;
+							mask.height=document.getElementById('maskHeight').value;
+						}
+						var ctx=mask.getContext('2d',{alpha:false});
+						ctx.createImageData(mask.height,mask.width);
+						for(const [y,row] of Object.entries(mask_editor.mask)){
+							for(const [x,pixel] of Object.entries(row)){
+								ctx.fillStyle=pixel.style.backgroundColor;
+								if(document.getElementById('rotate').checked){
+									ctx.fillRect(y,x,1,1);
+								}else{
+									ctx.fillRect(x,y,1,1);
+								}
+							}
+						}
+						mask_editor.canvas['_'].rect(0,0,document.getElementById('previewCanvas').width,document.getElementById('previewCanvas').height);
+						mask_editor.canvas['_'].fillStyle=mask_editor.canvas['_'].createPattern(mask,'repeat');
+						mask_editor.canvas['_'].fill();
+					break;
+					case 'accurate':
+						var imageData=mask_editor.canvas['bg'].getImageData(0,0,document.getElementById('previewCanvas').width,document.getElementById('previewCanvas').height);
+						const data=imageData.data;
+						var count=0;
+						for(var i=0;i<data.length;i+=4){
+							if(document.getElementById('rotate').checked){
+								var pixel=mask_editor.mask[(count%document.getElementById('previewCanvas').height)%document.getElementById('maskHeight').value][(Math.floor(count/document.getElementById('previewCanvas').width))%document.getElementById('maskWidth').value];
+							}else{
+								var pixel=mask_editor.mask[(Math.floor(count/document.getElementById('previewCanvas').width))%document.getElementById('maskHeight').value][(count%document.getElementById('previewCanvas').height)%document.getElementById('maskWidth').value];
+							}
+							var bits=pixel.dataset.bits.split('').map(function(e){return parseInt(e);}),intensity=pixel.dataset.intensity.split(',').map(function(e){return parseFloat(e)/100;});
+							data[i]=Math.min(255,Math.round(data[i]*intensity[bits[0]]));
+							data[i+1]=Math.min(255,Math.round(data[i+1]*intensity[bits[1]]));
+							data[i+2]=Math.min(255,Math.round(data[i+2]*intensity[bits[2]]));
+							++count;
+						}
+						mask_editor.canvas['_'].putImageData(imageData,0,0);
+					break;
+				}
+			},
+			previewResize:function(e){
+				document.getElementById('previewCanvas').width=document.getElementById('previewWidth').value;
+				document.getElementById('previewCanvas').height=document.getElementById('previewHeight').value;
+				document.getElementById('previewCanvas').style.width=document.getElementById('previewWidth').value+'px';
+				document.getElementById('previewCanvas').style.height=document.getElementById('previewHeight').value+'px';
+				mask_editor.backgroundReset();
+				mask_editor.previewRender();
+			},
+			toolClick:function(e){
+				Array.prototype.map.call(document.querySelectorAll('.tools button'),function(e){
+					e.classList.remove('active');
+				});
+				var n=e.target;
+				while(n.tagName.toLowerCase()!='button'){
+					n=n.parentNode;
+				}
+				n.classList.add('active');
+				mask_editor.toolActive=n.name;
 			},
 		};
 		window.addEventListener('load',function(){
@@ -139,33 +574,163 @@
 </head>
 <body>
 	<h1>MiSTer - Shadow Mask Editor</h1>
-	<h2>Properties</h2>
-	<div>
+	<div style="display:grid;grid-template-columns:auto auto auto;">
+		<div class="properties">
+			<h2>Properties</h2>
+			<div>
+				<div>
+					<label for="maskWidth">Width</label><input type="number" min="1" max="16" value="1" step="1" id="maskWidth">
+				</div>
+				<div>
+					<label for="maskHeight">Height</label><input type="number" min="1" max="16" value="1" step="1" id="maskHeight">
+				</div>
+			</div>
+		</div>
+		<div class="previewType">
+			<h2>Preview Type</h2>
+			<div>
+				<div>
+					<input type="radio" name="preview" id="previewSimple" value="simple" checked="checked"><label for="previewSimple">Simple</label>
+				<div>
+				</div>
+					<input type="radio" name="preview" id="previewAccurate" value="accurate"><label for="previewAccurate">Accurate</label>
+				</div>
+				<div>
+					<input id="rotate" type="checkbox"><label for="rotate">Rotate</label>
+				</div>
+			</div>
+		</div>
+		<div class="backgroundType">
+			<h2>Background Type</h2>
+			<div>
+				<input type="radio" name="background" id="backgroundNone" value="none" checked="checked"><label for="backgroundNone">None</label>
+			</div>
+			<div>
+				<input type="radio" name="background" id="backgroundRainbow" value="rainbow"><label for="backgroundRainbow">Rainbow</label><input id="backgroundRainbowColors" type="number" min="1" max="128" value="24">
+			</div>
+			<div>
+				<div style="display:inline-block;">
+					<input type="radio" name="background" id="backgroundFile" value="image"><label for="backgroundFile">Image</label><br>&nbsp;
+				</div>
+				<div style="display:inline-block;">
+					<input type="file" name="backgroundFile" accept="image/*"><br>
+					<input id="resizePreview" type="checkbox"><label style="width:auto;" for="resizePreview">Resize Preview</label>
+				</div>
+			</div>
+		</div>
+	</div>
+	<div style="display:grid;grid-template-columns:auto auto auto;">
 		<div>
-			<label for="width">Width</label><input type="number" min="1" max="100" value="1" step="1" id="width">
+			<table class="tools">
+				<tr>
+					<td><button name="pencil" title="Mark Locations" class="active"><svg width="24" height="24" version="1.1" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><g transform="translate(44.112 -256.04)"><g transform="translate(-125.11 79.043)"><path transform="translate(241 217)" d="m-146.84-39-1.875 2c1.3287 0.02586 2.6651 1.2116 2.7188 2.4375l2-2c-0.0554-1.2653-1.4744-2.4884-2.8438-2.4375z" style="fill-rule:evenodd"/><path d="m83.631 189.04 7.5202-8.0345c1.3694-0.0509 2.7941 1.1634 2.8494 2.4288l-7.49 7.794-4.51 1.7757z" style="fill-rule:evenodd"/></g></g></svg></button></td>
+					<td><button name="eraser" title="Erase"><svg width="24" height="24" version="1.1" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><g transform="matrix(1.2513 0 0 1.2513 107.78 -433.99)"><g transform="translate(-149.73 129.23)"><path d="m72.156 218c-0.07885 0.0161-0.1595 0.0696-0.21875 0.125l-4.2812 4 4.0312 4.3438 4.1562-3.875c0.23699-0.22144 0.17839-0.68283-0.125-1.0312l-2.7812-3.2188c-0.22754-0.26132-0.54469-0.39209-0.78125-0.34375z"/><path d="m66.5 223.22-2.3438 2.1875c-0.23699 0.22144-0.20964 0.68283 0.09375 1.0312l2.8125 3.2188c0.30339 0.34842 0.73176 0.44019 0.96875 0.21875l2.4688-2.3125z" style="fill:#241f31;opacity:.5"/></g></g></svg></button></td>
+				</tr>
+				<tr>
+					<td><button name="fill" title="Replace Matching Colour"><svg width="24" height="24" version="1.1" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><g transform="translate(-32.101 -315.77)"><g transform="translate(32.101 -720.6)"><g transform="translate(-141 859.36)"><path transform="translate(241 217)" d="m-92-36.844-2.4688 1.8125-2.5312 1.8438 1.2812 1.875 1.0625 1.5625 2.7812 4.1562c0.38364 0.5682 1.0736 0.76981 1.5312 0.4375l4.9688-3.5938c0.45762-0.33233 0.50866-1.0568 0.125-1.625l-2.75-4.0625v1.4375c0 1.1046-0.89543 2-2 2s-2-0.89543-2-2z"/><rect x="150" y="177" width="1.9975" height="8" rx="1" ry="1"/></g><path d="m1.4616 1043.2c0.53387-1.3767 6.5405-3.211 4.4098-1.7978l-2.6635 1.7665s-0.01341 3.9521 0.02626 6.084c0.01315 0.7068-0.3916 1.2125-0.92813 1.2288-0.56365 0.017-1.0115-0.3153-1.0631-1.2288-0.12032-2.1291-0.45614-4.3122 0.21875-6.0527z" style="fill:#241f31;opacity:.5"/></g></g></svg></button></td>
+					<td><button name="dropper" title="Eye Dropper"><svg width="24" height="24" version="1.1" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><g transform="translate(-54.412 -315.77)"><g transform="matrix(1 0 0 .99725 -126.59 139.25)"><path d="m191.61 182.4-4.2202 5.6634-1.694 1.4926-0.69772-0.56071 0.99632-2.0533 4.2202-5.6634z" style="fill-rule:evenodd"/><path d="m185 189.57s-1.4772 0.66848-1.4654 2.0797c0.0147 1.758 2.6601 1.8434 2.7433 0.28446 0.0475-0.89097-1.2779-2.3642-1.2779-2.3642z" style="fill-rule:evenodd;fill:#241f31;opacity:.5"/><path d="m187.65 181.43 4.6492 3.5274 0.70445-0.92575-1.3947-1.0582c2.8037-0.79322 4.7199-4.1748 2.8603-5.5858-1.8597-1.4109-4.7057 1.2652-4.7199 4.1749l-1.3948-1.0582z" style="fill-rule:evenodd"/></g></g></svg></button></td>
+				</tr>
+			</table>
 		</div>
 		<div>
-			<label for="height">Height</label><input type="number" min="1" max="100" value="1" step="1" id="height">
+			<table class="palette">
+				<tr>
+					<td><button data-bits='111' data-code="7" data-intensity="62.5,112.5" style="background-color:hsl(0,0%,56.25%);" title="White"><div style="background-color:hsl(0,0%,46.875%);"></div></button></td>
+					<td><button data-bits='100' data-code="4" data-intensity="62.5,112.5" style="background-color:hsl(0,100%,56.25%);" title="Red"><div style="background-color:hsl(180,100%,31.25%);"></div></button></td>
+					<td><button data-bits='010' data-code="2" data-intensity="62.5,112.5" style="background-color:hsl(120,100%,56.25%);" title="Green"><div style="background-color:hsl(300,100%,31.25%);"></div></button></td>
+					<td><button data-bits='001' data-code="1" data-intensity="62.5,112.5" style="background-color:hsl(240,100%,56.25%);" title="Blue"><div style="background-color:hsl(60,100%,31.25%);"></div></button></td>
+				</tr>
+				<tr>
+					<td><button data-bits='000' data-code="0" data-intensity="62.5,112.5" style="background-color:hsl(0,0%,31.25%);" title="Black"><div style="background-color:hsl(0,0%,46.875%);"></div></button></td>
+					<td><button data-bits='101' data-code="5" data-intensity="62.5,112.5" style="background-color:hsl(300,100%,56.25%);" title="Magenta"><div style="background-color:hsl(120,100%,31.25%);"></div></button></td>
+					<td><button data-bits='110' data-code="6" data-intensity="62.5,112.5" style="background-color:hsl(60,100%,56.25%);" title="Yellow"><div style="background-color:hsl(240,100%,31.25%);"></div></button></td>
+					<td><button data-bits='011' data-code="3" data-intensity="62.5,112.5" style="background-color:hsl(180,100%,56.25%);" title="Cyan"><div style="background-color:hsl(0,100%,31.25%);"></div></button></td>
+				</tr>
+			</table>
+		</div>
+		<div>
+			<div id="activeColor" data-bits='111' data-code="7" data-intensity="62.5,112.5" style="background-color:hsl(0,0%,56.25%);" title="Active Colour"><div style="background-color:hsl(0,0%,46.875%);"></div></div>
+			<div class="intensity">
+				<input id="intensityOn" type="range" min="100" max="193.75" step="6.25" value="112.5" title="&quot;On&quot; Intensity"><div>112.5</div>
+				<input id="intensityOff" type="range" min="0" max="93.75" step="6.25" value="62.5" title="&quot;Off&quot; Intensity"><div>62.5</div>
+			</div>
+			<table class="intensityTools">
+				<tr>
+					<td><button name="plus" title="Increase Intensity"><svg width="24" height="24" version="1.1" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><g transform="translate(.79319 -1033.6)"><g transform="translate(-.79319 -2.7952)"><rect y="1036.4" width="16" height="16" style="opacity:0;stroke-width:.21381"/><g transform="matrix(-.95044 .95568 -.95568 -.95044 951.75 2043.7)"><path d="m-34.832 1015.3a1.1115 1.1115 0 0 0-0.7793 1.9062l5.7324 5.7676a1.1115 1.1115 0 1 0 1.5762-1.5664l-5.7324-5.7676a1.1115 1.1115 0 0 0-0.79688-0.3398z" style="color-rendering:auto;color:#000000;dominant-baseline:auto;font-feature-settings:normal;font-variant-alternates:normal;font-variant-caps:normal;font-variant-ligatures:normal;font-variant-numeric:normal;font-variant-position:normal;image-rendering:auto;isolation:auto;mix-blend-mode:normal;shape-padding:0;shape-rendering:auto;solid-color:#000000;text-decoration-color:#000000;text-decoration-line:none;text-decoration-style:solid;text-indent:0;text-orientation:mixed;text-transform:none;white-space:normal"/><path d="m-29.102 1015.3a1.0786 1.0786 0 0 0-0.74024 0.3301l-5.7656 5.83a1.0786 1.0786 0 1 0 1.5332 1.5157l5.7656-5.8301a1.0786 1.0786 0 0 0-0.79297-1.8457z" style="color-rendering:auto;color:#000000;dominant-baseline:auto;font-feature-settings:normal;font-variant-alternates:normal;font-variant-caps:normal;font-variant-ligatures:normal;font-variant-numeric:normal;font-variant-position:normal;image-rendering:auto;isolation:auto;mix-blend-mode:normal;shape-padding:0;shape-rendering:auto;solid-color:#000000;text-decoration-color:#000000;text-decoration-line:none;text-decoration-style:solid;text-indent:0;text-orientation:mixed;text-transform:none;white-space:normal"/></g></g></g></svg></button></td>
+					<td><button name="half" title="Reduce Intensity By Half"><svg width="24" height="24" version="1.1" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><g transform="translate(-11.895 -273.54)"><g transform="translate(-129.1 -3.4605)"><path d="m144 277 3 4 3-4z"/><path d="m144 293 3-4 3 4z"/><path d="m142 282v6h14v-6zm1 1h12v4h-12v-4z"/><rect x="147" y="283" width="3" height="4" style="opacity:.3"/><rect x="146" y="284" width="1" height="1" style="opacity:.3"/><rect x="146" y="286" width="1" height="1" style="opacity:.3"/><rect x="153" y="283" width="1.9999" height="4"/><rect x="152" y="285" width="1" height="1"/><rect x="152" y="283" width="1" height="1"/><rect x="145" y="285" width="1" height="1" style="opacity:.3"/><rect x="145" y="283" width="1" height="1" style="opacity:.3"/><rect transform="scale(1,-1)" x="151" y="-287" width="1" height="1"/><rect transform="scale(1,-1)" x="151" y="-285" width="1" height="1"/><rect transform="scale(1,-1)" x="150" y="-284" width="1" height="1"/><rect transform="scale(1,-1)" x="150" y="-286" width="1" height="1"/></g></g></svg></button></td>
+					<td></td>
+				</tr>
+				<tr>
+					<td><button name="minus" title="Deceases Intensity"><svg width="24" height="24" version="1.1" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><g transform="translate(7.7932 -1039.6)"><g transform="translate(-7.7932 3.2048)"><rect y="1036.4" width="16" height="16" style="opacity:0;stroke-width:.21381"/><g transform="matrix(-.95044 .95568 -.95568 -.95044 951.75 2043.7)"><path d="m-34.832 1015.3a1.1115 1.1115 0 0 0-0.7793 1.9062l5.7324 5.7676a1.1115 1.1115 0 1 0 1.5762-1.5664l-5.7324-5.7676a1.1115 1.1115 0 0 0-0.79688-0.3398z" style="color-rendering:auto;color:#000000;dominant-baseline:auto;font-feature-settings:normal;font-variant-alternates:normal;font-variant-caps:normal;font-variant-ligatures:normal;font-variant-numeric:normal;font-variant-position:normal;image-rendering:auto;isolation:auto;mix-blend-mode:normal;shape-padding:0;shape-rendering:auto;solid-color:#000000;text-decoration-color:#000000;text-decoration-line:none;text-decoration-style:solid;text-indent:0;text-orientation:mixed;text-transform:none;white-space:normal"/></g></g></g></svg></button></td>
+					<td><button name="invert" title="Swap Intensity Levels"><svg width="24" height="24" version="1.1" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><g transform="translate(-82.508 14.565)"><g transform="translate(-78.492 -513.57)"><path d="m161 499v16h16v-16zm1 1h14v14h-14z"/><path transform="translate(241 217)" d="m-79 283v14l3.4688-3.4688c-0.90482-0.90482-1.4688-2.1505-1.4688-3.5312 0-2.7614 2.2386-5 5-5 1.3807 0 2.6264 0.56393 3.5312 1.4688l3.4688-3.4688z"/><path d="m174 507c0 2.7614-2.2386 5-5 5-1.3807 0-2.6264-0.56393-3.5312-1.4688l7.0625-7.0625c0.90482 0.90482 1.4688 2.1505 1.4688 3.5312z"/></g></g></svg></button></td>
+					<td><button name="reset" title="Reset To Defaults"><svg width="24" height="24" version="1.1" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><g transform="matrix(1.0009 0 0 1.0002 0 -1036.6)"><rect y="1036.4" width="16" height="15.997" style="opacity:0;stroke-width:.99989"/><path d="m7 1049.9a2.5 2.4995 0 0 1-2.5 2.4995 2.5 2.4995 0 0 1-2.5-2.4995 2.5 2.4995 0 0 1 2.5-2.4995 2.5 2.4995 0 0 1 2.5 2.4995z"/><path d="m4 1046.4-4-3.9992h8z"/><path d="m8.7168 1050.9c2.5588 0.04 4.8717-1.5623 5.8555-3.9941 0.9838-2.4319 0.48634-5.2392-1.2852-7.1387-1.7715-1.8995-4.5089-2.4977-6.8672-1.4766-2.3583 1.0211-3.8672 3.4214-3.8672 6.0567h2c0-1.8726 1.0721-3.5323 2.6621-4.2207 1.59-0.6885 3.3861-0.3058 4.6094 1.0058 1.2232 1.3117 1.5876 3.3102 0.89453 5.0235-0.69311 1.7132-2.2629 2.7729-3.9707 2.746z" style="color-rendering:auto;color:#000000;dominant-baseline:auto;font-feature-settings:normal;font-variant-alternates:normal;font-variant-caps:normal;font-variant-ligatures:normal;font-variant-numeric:normal;font-variant-position:normal;image-rendering:auto;isolation:auto;mix-blend-mode:normal;shape-padding:0;shape-rendering:auto;solid-color:#000000;text-decoration-color:#000000;text-decoration-line:none;text-decoration-style:solid;text-indent:0;text-orientation:mixed;text-transform:none;white-space:normal"/></g></svg></button></td>
+				</tr>
+			</table>
 		</div>
 	</div>
-	<h2>Color Palette</h2>
-	<div>
-		<button style="background-color:grey;"></button>
-		<button style="background-color:blue;"></button>
-		<button style="background-color:green;"></button>
-		<button style="background-color:cyan;"></button>
-		<button style="background-color:red;"></button>
-		<button style="background-color:magenta;"></button>
-		<button style="background-color:yellow;"></button>
-		<button style="background-color:white;border:5px solid #000;"></button>
+	<div style="display:grid;grid-template-columns:auto auto;">
+		<div>
+			<h2>Mask</h2>
+			<div id="mask"></div>
+		</div>
+		<div class="preview">
+			<h2>Preview</h2>
+			<canvas id="previewCanvas" width="300" height="300"></canvas>
+			<div><input id="previewWidth" type="number" value="300">x<input id="previewHeight" type="number" value="300"></div>
+		</div>
 	</div>
-	<h2>Mask</h2>
-	<div>
-		<div id="mask"></div>
+	<div style="display:grid;grid-template-columns:auto auto;">
+		<div>
+			<h2>Mask Definition</h2>
+			<div>
+				<textarea id="output" readonly="readonly" onclick="this.focus();this.select()"></textarea>
+			</div>
+			<h2>Instructions</h2>
+			<ol>
+				<li>Create a folder named <strong>Shadow_Masks</strong> in the root of your MiSTer MicroSD Card.</li>
+				<li>Copy &amp; paste the above Mask Definition into a new text file (*.txt) inside of the Shadow_Masks folder.</li>
+				<li>Select your Mask from the MiSTer GUI.</li>
+			</ol>
+		</div>
+		<div>
+			<h2>Load Mask</h2>
+			<input type="file" name="maskFile" accept="text/plain">
+		</div>
 	</div>
-	<h2>Mask Definition</h2>
-	<div>
-		<textarea id="output"></textarea>
-	<div>
+	<div class="help">
+		<h2>The Colour Palette</h2>
+		<p>Each location in a Shadow Mask contains two sets of intensity information [shown as two squares in the editor]. The primary "on" set increases intensity of matching colour channels, causing them to appear brighter [the larger square]. The reverse "off" set deceases intensity of opposite colour channels, causing them to appear darker [the smaller square].</p>
+	</div>
+	<div class="help">
+		<h2>Preview Types</h2>
+		<p>There are two ways to view a Shadow Mask with the editor. The <strong>Simple</strong> mode is very fast and intended for quick reference and composition. And the more CPU intensive <strong>Accurate</strong> mode that recreates the way MiSTer will render the Shadow Mask. Keep in mind: the position of the Preview window of the editor and sub-pixel layouts of the screens used will greatly affect the appearance of your Shadow Mask. What looks good on one screen may not look as good on another; it all comes down to the sub-pixel layouts of the screens.</p>
+		<table>
+			<caption>Preview Type Feature Matrix</caption>
+			<tr><th></th><th>Simple</th><th>Accurate</th></tr>
+			<tr><td>Fast</td><td>&check;</td><td></td></tr>
+			<tr><td>Matches MiSTer</td><td></td><td>&check;</td></tr>
+			<tr><td>Color Intensity</td><td></td><td>&check;</td></tr>
+			<tr><td>Rainbow Test Pattern</td><td></td><td>&check;</td></tr>
+			<tr><td>Background Images</td><td></td><td>&check;</td></tr>
+		</table>
+	</div>
+	<div class="help">
+		<h2>Tools</h2>
+		<dl>
+			<dt>Pencil</dt>
+			<dd>Will allow you to mark locations on the Shadow Mask with the current active colour.</dd>
+			<dt>Eraser</dt>
+			<dd>Will make the selected location on the Shadow Mask transparent, regardless of the current active colour.</dd>
+			<dt>Flood Fill</dt>
+			<dd>Will replace all the locations in the Shadow Mask that match the selected location with the current active colour.</dd>
+			<dt>Eye Dropper</dt>
+			<dd>Will replace the active colour with the selected location from the Shadow Mask.</dd>
+		</dl>
+	</div>
+	<div class="help">
+		<h2>Additional Information</h2>
+		<p>Most items and tools on the editor interface have tooltips that appear when hovered over.</p>
+		<p>Chrome is noticeably faster than Firefox, but may cause erroneous anti-aliasing to appear in the preview area.</p>
+	</div>
 </body>
 </html>
