@@ -150,6 +150,7 @@
 			toolActive:'pencil',
 			toolPrevious:'pencil',
 			mouseActive:false,
+			renderWaiting:false,
 			history:[
 				[],
 				[],
@@ -671,8 +672,15 @@
 			},
 			mouseUp:function(){
 				mask_editor.mouseActive=false;
+				if(mask_editor.renderWaiting){
+					mask_editor.previewRender();
+				}
 			},
 			previewRender:function(){
+				if(mask_editor.mouseActive){
+					mask_editor.renderWaiting=true;
+					return;
+				}
 				switch(document.querySelector('input[name="preview"]:checked').value){
 					case 'simple':
 						var mask=document.createElement('canvas');
@@ -700,22 +708,29 @@
 						mask_editor.canvas['_'].fill();
 					break;
 					case 'accurate':
-						var imageData=mask_editor.canvas['bg'].getImageData(0,0,document.getElementById('previewCanvas').width,document.getElementById('previewCanvas').height);
-						const data=imageData.data;
-						var count=0;
-						for(var i=0;i<data.length;i+=4){
-							if(document.getElementById('rotate').checked){
-								var pixel=mask_editor.mask[(count%document.getElementById('previewCanvas').height)%document.getElementById('maskHeight').value][(Math.floor(count/document.getElementById('previewCanvas').width))%document.getElementById('maskWidth').value];
-							}else{
-								var pixel=mask_editor.mask[(Math.floor(count/document.getElementById('previewCanvas').width))%document.getElementById('maskHeight').value][(count%document.getElementById('previewCanvas').height)%document.getElementById('maskWidth').value];
+						var debounce;
+						clearTimeout(debounce);
+						debounce=setTimeout(function(){
+							if(document.querySelector('input[name="preview"]:checked').value!='accurate'){
+								return;
 							}
-							var bits=pixel.dataset.bits.split('').map(function(e){return parseInt(e);}),intensity=pixel.dataset.intensity.split(',').map(function(e){return parseFloat(e)/100;});
-							data[i]=Math.min(255,Math.round(data[i]*intensity[bits[0]]));
-							data[i+1]=Math.min(255,Math.round(data[i+1]*intensity[bits[1]]));
-							data[i+2]=Math.min(255,Math.round(data[i+2]*intensity[bits[2]]));
-							++count;
-						}
-						mask_editor.canvas['_'].putImageData(imageData,0,0);
+							var imageData=mask_editor.canvas['bg'].getImageData(0,0,document.getElementById('previewCanvas').width,document.getElementById('previewCanvas').height);
+							const data=imageData.data;
+							var count=0;
+							for(var i=0;i<data.length;i+=4){
+								if(document.getElementById('rotate').checked){
+									var pixel=mask_editor.mask[(count%document.getElementById('previewCanvas').height)%document.getElementById('maskHeight').value][(Math.floor(count/document.getElementById('previewCanvas').width))%document.getElementById('maskWidth').value];
+								}else{
+									var pixel=mask_editor.mask[(Math.floor(count/document.getElementById('previewCanvas').width))%document.getElementById('maskHeight').value][(count%document.getElementById('previewCanvas').height)%document.getElementById('maskWidth').value];
+								}
+								var bits=pixel.dataset.bits.split('').map(function(e){return parseInt(e);}),intensity=pixel.dataset.intensity.split(',').map(function(e){return parseFloat(e)/100;});
+								data[i]=Math.min(255,Math.round(data[i]*intensity[bits[0]]));
+								data[i+1]=Math.min(255,Math.round(data[i+1]*intensity[bits[1]]));
+								data[i+2]=Math.min(255,Math.round(data[i+2]*intensity[bits[2]]));
+								++count;
+							}
+							mask_editor.canvas['_'].putImageData(imageData,0,0);
+						},300);
 					break;
 				}
 			},
