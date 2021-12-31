@@ -173,7 +173,6 @@
 					e.addEventListener('change',mask_editor.backgroundChange);
 				});
 				document.getElementById('backgroundRainbowColors').addEventListener('change',mask_editor.backgroundChange);
-				document.getElementById('rotate').addEventListener('change',mask_editor.previewRender);
 				document.getElementsByName('backgroundFile')[0].addEventListener('change',mask_editor.backgroundLoad);
 				Array.prototype.map.call(document.querySelectorAll('.tools button'),function(e){
 					e.addEventListener('click',mask_editor.toolClick);
@@ -251,7 +250,7 @@
 					mask_editor.backgroundImage=new Image;
 					mask_editor.backgroundImage.src=reader.result;
 					mask_editor.backgroundImage.onload=function(){
-						if(document.getElementById('resizePreview').checked){
+						if(document.getElementById('backgroundResizePreview').checked){
 							document.getElementById('previewWidth').value=this.width;
 							document.getElementById('previewHeight').value=this.height;
 							mask_editor.previewResize();
@@ -684,19 +683,26 @@
 				switch(document.querySelector('input[name="preview"]:checked').value){
 					case 'simple':
 						var mask=document.createElement('canvas');
-						if(document.getElementById('rotate').checked){
-							mask.width=document.getElementById('maskHeight').value;
+						mask.height=document.getElementById('maskHeight').value;
+						mask.width=document.getElementById('maskWidth').value;
+						if(document.getElementById('previewRotate').checked){
 							mask.height=document.getElementById('maskWidth').value;
-						}else{
-							mask.width=document.getElementById('maskWidth').value;
-							mask.height=document.getElementById('maskHeight').value;
+							mask.width=document.getElementById('maskHeight').value;
+						}
+						if(document.getElementById('previewDouble').checked){
+							mask.height*=2;
+							mask.width*=2;
 						}
 						var ctx=mask.getContext('2d',{alpha:false});
 						ctx.createImageData(mask.height,mask.width);
+						if(document.getElementById('previewDouble').checked){
+							ctx.imageSmoothingEnabled=false;
+							ctx.transform(2,0,0,2,0,0);
+						}
 						for(const [y,row] of Object.entries(mask_editor.mask)){
 							for(const [x,pixel] of Object.entries(row)){
 								ctx.fillStyle=pixel.style.backgroundColor;
-								if(document.getElementById('rotate').checked){
+								if(document.getElementById('previewRotate').checked){
 									ctx.fillRect(y,x,1,1);
 								}else{
 									ctx.fillRect(x,y,1,1);
@@ -718,10 +724,17 @@
 							const data=imageData.data;
 							var count=0;
 							for(var i=0;i<data.length;i+=4){
-								if(document.getElementById('rotate').checked){
-									var pixel=mask_editor.mask[(count%document.getElementById('previewCanvas').height)%document.getElementById('maskHeight').value][(Math.floor(count/document.getElementById('previewCanvas').width))%document.getElementById('maskWidth').value];
+								var pos=[
+									Math.floor(count/document.getElementById('previewCanvas').width),
+									(count%document.getElementById('previewCanvas').width),
+								];
+								if(document.getElementById('previewDouble').checked){
+									pos=pos.map(function(e){return Math.floor(e*0.5);});
+								}
+								if(document.getElementById('previewRotate').checked){
+									var pixel=mask_editor.mask[pos[1]%document.getElementById('maskHeight').value][pos[0]%document.getElementById('maskWidth').value];
 								}else{
-									var pixel=mask_editor.mask[(Math.floor(count/document.getElementById('previewCanvas').width))%document.getElementById('maskHeight').value][(count%document.getElementById('previewCanvas').height)%document.getElementById('maskWidth').value];
+									var pixel=mask_editor.mask[pos[0]%document.getElementById('maskHeight').value][pos[1]%document.getElementById('maskWidth').value];
 								}
 								var bits=pixel.dataset.bits.split('').map(function(e){return parseInt(e);}),intensity=pixel.dataset.intensity.split(',').map(function(e){return parseFloat(e)/100;});
 								data[i]=Math.min(255,Math.round(data[i]*intensity[bits[0]]));
@@ -814,7 +827,8 @@
 					<input type="radio" name="preview" id="previewAccurate" value="accurate"><label for="previewAccurate">Accurate</label>
 				</div>
 				<div>
-					<input id="rotate" type="checkbox"><label for="rotate">Rotate</label>
+					<input id="previewRotate" type="checkbox"><label for="previewRotate">Rotate</label>
+					<input id="previewDouble" type="checkbox"><label for="previewDouble">2x</label>
 				</div>
 			</div>
 		</div>
@@ -832,7 +846,7 @@
 				</div>
 				<div style="display:inline-block;">
 					<input type="file" name="backgroundFile" accept="image/*"><br>
-					<input id="resizePreview" type="checkbox"><label style="width:auto;" for="resizePreview">Resize Preview</label>
+					<input id="backgroundResizePreview" type="checkbox"><label style="width:auto;" for="backgroundResizePreview">Resize Preview</label>
 				</div>
 			</div>
 		</div>
