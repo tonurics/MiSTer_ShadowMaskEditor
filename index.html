@@ -69,14 +69,14 @@
 			padding:2px 4px;
 			white-space:nowrap;
 		}
-		.tools button,.intensityTools button{
+		.tools button,.intensityTools button,.toolsMask button{
 			background-color:hsl(0,0%,65%);
 			border-radius:3px;
 			height:32px;
 			padding:4px;
 			width:32px;
 		}
-		.tools button.active{background-color:hsl(0,0%,90%);}
+		.tools button.active,.toolsMask button.active{background-color:hsl(0,0%,90%);}
 		.palette td{
 			border:1px solid transparent;
 			padding:0px;
@@ -119,6 +119,7 @@
 			line-height:0px;
 			margin:0px;
 			padding:0px;
+			position:relative;
 		}
 		#mask>div>div{
 			border:1px solid #000;
@@ -132,11 +133,36 @@
 			width:16px;
 			margin:8px 8px;
 		}
+		#mask span{
+			color:rgba(0,0,0,0.75);
+			font-size:80%;
+			user-select:none;
+			user-drag:none;
+			-webkit-user-drag:none;
+		}
+		#mask>div>span{
+			top:18px;
+			padding-left:4px;
+			position:absolute;
+			z-index:0;
+		}
+		#mask>span{
+			border:1px solid rgba(0,0,0,0);
+			display:inline-block;
+			text-align:center;
+			height:32px;
+			width:32px;
+		}
 		#activeColor{
 			border:1px solid #000;
 			display:inline-block;
 			height:64px;
 			width:64px;
+		}
+		#activeEncode{
+			color:#000;
+			float:left;
+			margin:32px 4px 0px 0px;
 		}
 		#activeColor div{
 			height:32px;
@@ -144,6 +170,7 @@
 			margin:16px 16px;
 		}
 		#backgroundRainbowColors{width:40px;}
+		#backgroundScale{width:30px;}
 	</style>
 	<script type="text/javascript">
 		var mask_editor={
@@ -151,6 +178,9 @@
 			toolPrevious:'pencil',
 			mouseActive:false,
 			renderWaiting:false,
+			resolution:{
+				0:'',
+			},
 			history:[
 				[],
 				[],
@@ -163,6 +193,7 @@
 					_:document.getElementById('previewCanvas').getContext('2d',{alpha:false}),
 				};
 				mask_editor.backgroundReset();
+				document.getElementsByName('maskFile')[0].addEventListener('change',mask_editor.maskLoad);
 				Array.prototype.map.call(document.querySelectorAll('.properties input'),function(e){
 					e.addEventListener('change',mask_editor.maskResize);
 				});
@@ -173,6 +204,7 @@
 					e.addEventListener('change',mask_editor.backgroundChange);
 				});
 				document.getElementById('backgroundRainbowColors').addEventListener('change',mask_editor.backgroundChange);
+				document.getElementById('backgroundScale').addEventListener('change',mask_editor.backgroundScaleChange);
 				document.getElementsByName('backgroundFile')[0].addEventListener('change',mask_editor.backgroundLoad);
 				Array.prototype.map.call(document.querySelectorAll('.tools button'),function(e){
 					e.addEventListener('click',mask_editor.toolClick);
@@ -187,11 +219,30 @@
 				Array.prototype.map.call(document.querySelectorAll('.intensityTools button'),function(e){
 					e.addEventListener('click',mask_editor.intensityToolClick);
 				});
+				Array.prototype.map.call(document.querySelectorAll('.toolsMask button'),function(e){
+					e.addEventListener('click',mask_editor.toolsToogle);
+				});
+				Array.prototype.map.call(document.querySelectorAll('.toolsMask select'),function(e){
+					e.addEventListener('change',mask_editor.toolsTransform);
+				});
 				Array.prototype.map.call(document.querySelectorAll('.preview input'),function(e){
 					e.addEventListener('change',mask_editor.previewResize);
 				});
-				document.getElementsByName('maskFile')[0].addEventListener('change',mask_editor.maskLoad);
+				Array.prototype.map.call(document.querySelectorAll('.maskDetails input,.maskDetails select'),function(e){
+					e.addEventListener('change',mask_editor.maskDetailsChange);
+				});
+				document.getElementById('maskResolution').addEventListener('change',mask_editor.maskResolutionChange);
+				document.getElementById('maskResolution').addEventListener('keydown',mask_editor.maskResolutionKeyDown);
+				document.getElementById('maskResolution').nextElementSibling.nextElementSibling.nextElementSibling.addEventListener('click',mask_editor.maskResolutionAdd);
+				document.getElementById('output').nextElementSibling.nextElementSibling.addEventListener('click',mask_editor.maskDownload);
 				mask_editor.maskResize();
+			},
+			activeEncodeDisplay:function(){
+				document.getElementById('activeEncode').innerHTML=[
+					document.getElementById('activeColor').dataset.code,
+					((document.getElementById('intensityOn').value-100)/6.25).toString(16),
+					(document.getElementById('intensityOff').value/6.25).toString(16),
+				].join('');
 			},
 			backgroundChange:function(){
 				mask_editor.backgroundReset();
@@ -204,6 +255,7 @@
 				mask_editor.canvas['bg'].style.width=document.getElementById('previewCanvas').style.width;
 				mask_editor.canvas['bg'].style.height=document.getElementById('previewCanvas').style.height;
 				mask_editor.canvas['bg']=mask_editor.canvas['bg'].getContext('2d',{alpha:false});
+				mask_editor.canvas['bg'].imageSmoothingEnabled=false;
 				switch(document.querySelector('input[name="background"]:checked').value){
 					case 'none':
 						mask_editor.canvas['bg'].fillStyle='hsl(0,0%,50%)';
@@ -238,7 +290,7 @@
 						mask_editor.canvas['bg'].fill();
 					break;
 					case 'image':
-						mask_editor.canvas['bg'].drawImage(mask_editor.backgroundImage,0,0);
+						mask_editor.canvas['bg'].drawImage(mask_editor.backgroundImage,0,0,mask_editor.backgroundImage.width,mask_editor.backgroundImage.height);
 					break;
 				}
 			},
@@ -250,13 +302,16 @@
 					mask_editor.backgroundImage=new Image;
 					mask_editor.backgroundImage.src=reader.result;
 					mask_editor.backgroundImage.onload=function(){
+						this.originalWidth=this.width;
+						this.originalHeight=this.height;
+						mask_editor.backgroundScale();
 						if(document.getElementById('backgroundResizePreview').checked){
 							document.getElementById('previewWidth').value=this.width;
 							document.getElementById('previewHeight').value=this.height;
 							mask_editor.previewResize();
 						}
 						if(document.querySelector('input[name="background"]:checked').value=='image'){
-							mask_editor.canvas['bg'].drawImage(this,0,0);
+							mask_editor.canvas['bg'].drawImage(this,0,0,this.width,this.height);
 							mask_editor.previewRender();
 						}
 					};
@@ -264,6 +319,21 @@
 				if(e.target.files[0]){
 					reader.readAsDataURL(e.target.files[0]);
 				}
+			},
+			backgroundScale:function(){
+				if(mask_editor.backgroundImage){
+					mask_editor.backgroundImage.width=mask_editor.backgroundImage.originalWidth*Math.max(1,document.getElementById('backgroundScale').value);
+					mask_editor.backgroundImage.height=mask_editor.backgroundImage.originalHeight*Math.max(1,document.getElementById('backgroundScale').value);
+					if(document.getElementById('backgroundResizePreview').checked){
+						document.getElementById('previewWidth').value=mask_editor.backgroundImage.width;
+						document.getElementById('previewHeight').value=mask_editor.backgroundImage.height;
+						mask_editor.previewResize();
+					}
+				}
+			},
+			backgroundScaleChange:function(){
+				mask_editor.backgroundScale();
+				mask_editor.backgroundChange();
 			},
 			colorHSL:function(e){
 				var intensity=e.dataset.intensity.split(',').map(function(e){return parseFloat(e);});
@@ -303,15 +373,18 @@
 					}
 				}
 				mask_editor.maskSet(n,document.getElementById('activeColor'));
+				mask_editor.activeEncodeDisplay();
 			},
 			intensityChange:function(){
 				Array.prototype.map.call(document.querySelectorAll('.palette button,#activeColor'),function(e){
 					e.dataset.intensity=[document.getElementById('intensityOff').value,document.getElementById('intensityOn').value];
 					mask_editor.colorHSL(e);
 				});
+				mask_editor.activeEncodeDisplay();
 			},
 			intensityInput:function(e){
 				e.target.nextElementSibling.innerHTML=e.target.value;
+				mask_editor.activeEncodeDisplay();
 			},
 			intensityToolClick:function(e){
 				var n=e.target;
@@ -348,6 +421,7 @@
 			keyDown:function(e){
 				if(
 					e.target.tagName.toLowerCase()!='input'&&
+					e.target.tagName.toLowerCase()!='select'&&
 					e.target.tagName.toLowerCase()!='textarea'
 				){
 					switch(e.key){
@@ -404,6 +478,15 @@
 								'p':'pencil',
 							}[e.key]+'"]').dispatchEvent(new Event('click'));
 						break;
+						case 'S':
+						case 's':
+							if(
+								e.ctrlKey&&
+								e.shiftKey
+							){
+								mask_editor.maskDownload();
+							}
+						break;
 						case 'Z':
 						case 'z':
 							if(e.ctrlKey){
@@ -437,11 +520,11 @@
 					(
 						mask_editor.history[0].length==0||
 						(
-							mask_editor.history[0][mask_editor.history[0].length-1]!=document.getElementById('output').value
+							mask_editor.history[0][mask_editor.history[0].length-1]!=mask_editor.resolution[document.getElementById('maskResolution').value]
 						)
 					)
 				){
-					mask_editor.history[0].push(document.getElementById('output').value);
+					mask_editor.history[0].push(mask_editor.resolution[document.getElementById('maskResolution').value]);
 					mask_editor.history[0]=mask_editor.history[0].slice(-16);
 					mask_editor.history[1]=[];
 					document.querySelector('.tools button[name="undo"]').disabled=false;
@@ -482,17 +565,55 @@
  						mask_editor.intensityChange();
 					break;
 				}
+				if(
+					(
+						mask_editor.toolActive=='pencil'||
+						mask_editor.toolActive=='eraser'
+					)&&
+					(
+						document.getElementById('mirrorV').classList.contains('active')||
+						document.getElementById('mirrorH').classList.contains('active')
+					)
+				){
+					var w=n.dataset.w,h=n.dataset.h;
+					if(document.getElementById('mirrorV').classList.contains('active')){
+						h=Math.round((1-((parseInt(n.dataset.h)+1)/parseInt(document.getElementById('maskHeight').value)))*parseInt(document.getElementById('maskHeight').value));
+					}
+					if(document.getElementById('mirrorH').classList.contains('active')){
+						w=Math.round((1-((parseInt(n.dataset.w)+1)/parseInt(document.getElementById('maskWidth').value)))*parseInt(document.getElementById('maskWidth').value));
+					}
+					mask_editor.maskSet(n,mask_editor.mask[h][w]);
+					mask_editor.maskExport();
+				}
 				mask_editor.toolActive=tool;
+			},
+			maskDetailsChange:function(){
+				mask_editor.maskExport();
+			},
+			maskDownload:function(){
+				var e=document.createElement('a');
+				e.setAttribute('href','data:text/plain;charset=utf-8,'+encodeURIComponent(document.getElementById('output').value));
+				if(document.getElementById('maskName').value){
+					e.setAttribute('download',document.getElementById('maskName').value+'.txt');
+					if(document.getElementById('maskSubPixelLayout').value){
+						e.setAttribute('download',document.getElementById('maskName').value+' ['+document.getElementById('maskSubPixelLayout').value+']'+'.txt');
+					}
+				}else{
+					e.setAttribute('download','ShadowMask.txt');
+				}
+				e.style.display='none';
+				document.body.appendChild(e);
+				e.click();
+				document.body.removeChild(e);
+				document.getElementById('maskName').value='';
 			},
 			maskExport:function(){
 				var output=[
 					'v2',
-					'',
 					[
 						document.getElementById('maskWidth').value,
 						document.getElementById('maskHeight').value,
 					].join(','),
-					'',
 				];
 				for(const [y,row] of Object.entries(mask_editor.mask)){
 					var line=[];
@@ -502,15 +623,67 @@
 					}
 					output.push(line.join(','));
 				}
-				document.getElementById('output').value=output.join("\n");
+				mask_editor.resolution[document.getElementById('maskResolution').value]=output.join("\n");
+				var comment=[];
+				output=[];
+				for(var [k,v] of Object.entries({
+					'Name':'maskName',
+					'Author':'maskAuthor',
+					'Type':'maskType',
+					'Genre':'maskGenre',
+					'Sub-Pixel Layout':'maskSubPixelLayout',
+				})){
+					if(document.getElementById(v).value){
+						comment.push([
+							'# '+k+': '+document.getElementById(v).value,
+						]);
+					}
+				}
+				if(document.getElementById('maskInformation').value){
+					comment=comment.concat([
+						'#',
+						'# Information:',
+						'# '+document.getElementById('maskInformation').value,
+					]);
+				}
+				if(comment.length){
+					output=[
+						'####',
+						comment.join("\n"),
+						'####',
+						'',
+					];
+				}
+				for(var [res,mask] of Object.entries(mask_editor.resolution)){
+					output.push('Resolution='+res);
+					output.push(mask+"\n");
+				}
+				document.getElementById('output').value=output.join("\n").trim();
 				mask_editor.previewRender();
 			},
 			maskLoad:function(e){
 				const reader=new FileReader();
 				reader.addEventListener('load',reader.addEventListener('load',function(){
+					if(!document.getElementById('maskFileUseResolution').checked){
+						while(document.getElementById('maskResolution').options.length>1){
+							document.getElementById('maskResolution').selectedIndex=1;
+							mask_editor.maskResolutionRemove();
+						}
+					}
 					mask_editor.maskParse(reader.result);
+					if(document.getElementById('maskResolution').options.length>1){
+						for(var i=0;i<document.getElementById('maskResolution').options.length;++i){
+							if(parseInt(document.getElementById('maskResolution').options[i].value)<=parseInt(document.getElementById('previewHeight').value)){
+								document.getElementById('maskResolution').selectedIndex=i;
+							}
+						}
+						mask_editor.maskResolutionChange();
+					}
 				}));
 				if(e.target.files[0]){
+					if(document.getElementById('maskName').value==''){
+						document.getElementById('maskName').value=e.target.files[0].name.replace(/( \[([RGB]{3}|Monochrome)\])?\.txt$/g,'');
+					}
 					reader.readAsText(e.target.files[0]);
 				}
 			},
@@ -525,7 +698,7 @@
 				n.dispatchEvent(new Event('click'));
 			},
 			maskParse:function(text){
-				var count=0,intensity=[
+				var row=0,height=false,intensity=[
 					[62.5,112.5],
 					[62.5,112.5],
 				],previewType=document.querySelector('input[name="preview"]:checked').value,version='1.0';
@@ -534,88 +707,122 @@
 				}
 				text.split('\n').forEach(function(line){
 					line=line.trim();
-					if(
-						line==''||
-						line.charAt(0)=='#'
-					){
+					if(line==''){
+						return;
+					}
+					if(line.charAt(0)=='#'){
+						if(match=line.match(/^# (?<Field>Name|Author|Type|Genre|Sub-Pixel Layout): (?<Value>.*)$/)){
+							document.getElementById({
+								'Name':'maskName',
+								'Author':'maskAuthor',
+								'Type':'maskType',
+								'Genre':'maskGenre',
+								'Sub-Pixel Layout':'maskSubPixelLayout',
+							}[match.groups['Field']]).value=match.groups['Value'].trim();
+						}
+						return;
+					}
+					if(line.charAt(0)=='R'){
+						if(match=line.match(/^Resolution=(?<MinHeight>\d*)$/)){
+							mask_editor.maskExport();
+							row=0,height=false,intensity=[
+								[62.5,112.5],
+								[62.5,112.5],
+							],version='1.0';
+							if(!document.getElementById('maskFileUseResolution').checked){
+								document.getElementById('maskResolution').nextElementSibling.nextElementSibling.value=match.groups['MinHeight'];
+								mask_editor.maskResolutionAdd();
+							}
+						}
 						return;
 					}
 					if(line=='v2'){
 						version='2.0';
 						return;
 					}
-					++count;
-					line=line.split(',');
-					if(count==1){
-						line[0]=Math.max(1,parseInt(line[0]));
-						line[1]=Math.max(1,parseInt(line[1]));
+					if(
+						!height&&
+						(match=line.match(/^(?<Width>\d{1,2}),(?<Height>\d{1,2})(,(?<IntensityA1>[0-9\.]+),(?<IntensityA2>[0-9\.]+))?(,(?<IntensityB1>[0-9\.]+),(?<IntensityB2>[0-9\.]+))?$/))
+					){
+						height=true;
+						match.groups['Width']=Math.min(16,Math.max(1,parseInt(match.groups['Width'])));
+						match.groups['Height']=Math.min(16,Math.max(1,parseInt(match.groups['Height'])));
 						if(
-							document.getElementById('maskWidth').value!=line[0]||
-							document.getElementById('maskHeight').value!=line[1]
+							document.getElementById('maskWidth').value!=match.groups['Width']||
+							document.getElementById('maskHeight').value!=match.groups['Height']
 						){
-							document.getElementById('maskWidth').value=line[0];
-							document.getElementById('maskHeight').value=line[1];
+							document.getElementById('maskWidth').value=match.groups['Width'];
+							document.getElementById('maskHeight').value=match.groups['Height'];
 							mask_editor.maskResize();
 						}
-						if(line.length>2){
-							intensity[0][1]=parseFloat(line[2]);
-							intensity[0][0]=parseFloat(line[3]);
-							if(line.length>4){
-								intensity[1][1]=intensity[0][1];
-								intensity[1][0]=intensity[0][0];
-								intensity[0][1]=parseFloat(line[4]);
-								intensity[0][0]=parseFloat(line[5]);
-							}else{
-								intensity[1][1]=intensity[0][1];
-								intensity[1][0]=intensity[0][0];
-							}
-							if(intensity[0][1]>=100){
-								version='1.3';
-							}else{
+						if(match.groups['IntensityA1']){
+							version='1.3';
+							match.groups['IntensityA1']=parseFloat(match.groups['IntensityA1']);
+							match.groups['IntensityA2']=parseFloat(match.groups['IntensityA2']);
+							if(match.groups['IntensityA1']<100){
 								version='1.1';
-								intensity[0][1]+=100;
-								intensity[1][1]+=100;
+								match.groups['IntensityA1']+=100;
 							}
+							intensity[0][1]=match.groups['IntensityA1'];
+							intensity[0][0]=match.groups['IntensityA2'];
+						}
+						if(match.groups['IntensityB1']){
+							match.groups['IntensityB1']=parseFloat(match.groups['IntensityB1']);
+							match.groups['IntensityB2']=parseFloat(match.groups['IntensityB2']);
+							if(match.groups['IntensityB1']<100){
+								match.groups['IntensityB1']+=100;
+							}
+							intensity[1][1]=intensity[0][1];
+							intensity[1][0]=intensity[0][0];
+							intensity[0][1]=match.groups['IntensityB1'];
+							intensity[0][0]=match.groups['IntensityB2'];
+						}else{
+							intensity[1][1]=match.groups['IntensityA1'];
+							intensity[1][0]=match.groups['IntensityA2'];
 						}
 						return;
 					}
-					var bits={
-						0:'000',1:'001',2:'010',3:'011',4:'100',5:'101',6:'110',7:'111',
-					},column=0;
-					line.forEach(function(location){
-						switch(version){
-							case '1.0':
-							case '1.1':
-							case '1.3':
-								var set=0;
-								location={
-									'0':0,'1':1,'2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,
-									'9':9,'10':10,'11':11,'12':12,'13':13,'14':14,'15':15,
-									'K':0,'B':1,'G':2,'C':3,'R':4,'M':5,'Y':6,'W':7,'k':8,
-									'b':9,'g':10,'c':11,'r':12,'m':13,'y':14,'w':15,
-								}[location];
-								if(location>8){
-									location-=8;
-									set=1;
-								}
-								mask_editor.mask[count-2][column].dataset.code=location;
-								mask_editor.mask[count-2][column].dataset.bits=bits[location];
-								mask_editor.mask[count-2][column].dataset.intensity=intensity[set];
-								mask_editor.colorHSL(mask_editor.mask[count-2][column]);
-							break;
-							case '2.0':
-								location=location.split('');
-								location[0]=parseInt(location[0]);
-								location[1]=parseInt(location[1],16);
-								location[2]=parseInt(location[2],16);
-								mask_editor.mask[count-2][column].dataset.code=location[0];
-								mask_editor.mask[count-2][column].dataset.bits=bits[location[0]];
-								mask_editor.mask[count-2][column].dataset.intensity=[(location[2]*6.25),((location[1]*6.25)+100)];
-								mask_editor.colorHSL(mask_editor.mask[count-2][column]);
-							break;
-						}
-						++column;
-					});
+					if(line.match(/^[0-9A-Fa-f,rgbcmykwRGBCMYKW]*$/)){
+						line=line.split(',');
+						var bits={
+							0:'000',1:'001',2:'010',3:'011',4:'100',5:'101',6:'110',7:'111',
+						},column=0;
+						line.forEach(function(location){
+							switch(version){
+								case '1.0':
+								case '1.1':
+								case '1.3':
+									var set=0;
+									location={
+										'0':0,'1':1,'2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,
+										'9':9,'10':10,'11':11,'12':12,'13':13,'14':14,'15':15,
+										'K':0,'B':1,'G':2,'C':3,'R':4,'M':5,'Y':6,'W':7,'k':8,
+										'b':9,'g':10,'c':11,'r':12,'m':13,'y':14,'w':15,
+									}[location];
+									if(location>8){
+										location-=8;
+										set=1;
+									}
+									mask_editor.mask[row][column].dataset.code=location;
+									mask_editor.mask[row][column].dataset.bits=bits[location];
+									mask_editor.mask[row][column].dataset.intensity=intensity[set];
+									mask_editor.colorHSL(mask_editor.mask[row][column]);
+								break;
+								case '2.0':
+									location=location.split('');
+									location[0]=parseInt(location[0]);
+									location[1]=parseInt(location[1],16);
+									location[2]=parseInt(location[2],16);
+									mask_editor.mask[row][column].dataset.code=location[0];
+									mask_editor.mask[row][column].dataset.bits=bits[location[0]];
+									mask_editor.mask[row][column].dataset.intensity=[(location[2]*6.25),((location[1]*6.25)+100)];
+									mask_editor.colorHSL(mask_editor.mask[row][column]);
+								break;
+							}
+							++column;
+						});
+						++row;
+					}
 				});
 				if(previewType=='accurate'){
 					document.getElementById('previewAccurate').checked=true;
@@ -631,10 +838,10 @@
 					e.value=Math.min(16,e.value);
 				});
 				if(
-					document.getElementById('output').value&&
+					mask_editor.resolution[document.getElementById('maskResolution').value]&&
 					e
 				){
-					mask_editor.history[0].push(document.getElementById('output').value);
+					mask_editor.history[0].push(mask_editor.resolution[document.getElementById('maskResolution').value]);
 					mask_editor.history[0]=mask_editor.history[0].slice(-16);
 					mask_editor.history[1]=[];
 					document.querySelector('.tools button[name="undo"]').disabled=false;
@@ -642,22 +849,102 @@
 				}
 				var row={};
 				mask_editor.mask={};
-				for(let h=0;h<document.getElementById('maskHeight').value;h++){
+				for(let h=0;h<document.getElementById('maskHeight').value;++h){
 					row[h]=document.createElement('div');
 					if(!mask_editor.mask.hasOwnProperty(h)){
 						mask_editor.mask[h]={};
 					}
-					for(let w=0;w<document.getElementById('maskWidth').value;w++){
+					for(let w=0;w<document.getElementById('maskWidth').value;++w){
 						mask_editor.mask[h][w]=document.createElement('div');
+						mask_editor.mask[h][w].dataset.h=h;
+						mask_editor.mask[h][w].dataset.w=w;
 						mask_editor.mask[h][w].addEventListener('click',mask_editor.maskClick);
 						mask_editor.mask[h][w].addEventListener('mouseover',mask_editor.maskMouseOver);
 						mask_editor.mask[h][w].appendChild(document.createElement('div'));
 						mask_editor.maskSet(document.getElementById('activeColor'),mask_editor.mask[h][w]);
 						row[h].appendChild(mask_editor.mask[h][w]);
 					}
+					var s=document.createElement('span');
+					s.innerHTML=h+1;
+					row[h].appendChild(s);
 					p.appendChild(row[h]);
 				}
+				for(let w=0;w<document.getElementById('maskWidth').value;++w){
+					var s=document.createElement('span');
+					s.innerHTML=w+1;
+					p.appendChild(s);
+				}
 				mask_editor.maskExport();
+			},
+			maskResolutionAdd:function(e){
+				var options=Array.apply(null,document.getElementById('maskResolution').options).map(function(e){return parseInt(e.value);}),userInput=false,v=Math.max(0,Math.min(2160,document.getElementById('maskResolution').nextElementSibling.nextElementSibling.value));
+				if(e){
+					userInput=true;
+				}
+				if(!options.includes(v)){
+					var e=document.createElement('option');
+					e.text=v;
+					e.name=v;
+					e.value=v;
+					for(var i=0;i<options.length;++i){
+						if(
+							(
+								options[i+1]&&
+								options[i+1]>v
+							)||!options[i+1]
+						){
+							document.getElementById('maskResolution').add(e,i+1);
+							document.getElementById('maskResolution').selectedIndex=i+1;
+							break;
+						}
+					}
+					mask_editor.resolution[v]='';
+					mask_editor.maskExport();
+					if(userInput){
+						document.getElementById('maskFile').value=null;
+					}
+				}
+			},
+			maskResolutionChange:function(userInput=false){
+				mask_editor.maskParse(mask_editor.resolution[document.getElementById('maskResolution').value]);
+				mask_editor.history[0]=[];
+				mask_editor.history[1]=[];
+				document.querySelector('.tools button[name="undo"]').disabled=true;
+				document.querySelector('.tools button[name="redo"]').disabled=true;
+				if(userInput){
+					document.getElementById('maskFile').value=null;
+				}
+			},
+			maskResolutionKeyDown:function(e){
+				if(!document.getElementById('maskResolution').options[document.getElementById('maskResolution').selectedIndex]){
+					return;
+				}
+				if(
+					e.key=='-'||
+					e.key=='Delete'||
+					e.key=='Backspace'
+				){
+					mask_editor.maskResolutionRemove(true);
+				}else if(e.key=='+'){
+					document.getElementById('maskResolution').nextElementSibling.nextElementSibling.nextElementSibling.dispatchEvent(new Event('click'));
+				}
+			},
+			maskResolutionRemove:function(userInput=false){
+				var v=document.getElementById('maskResolution').options[document.getElementById('maskResolution').selectedIndex].value;
+				if(
+					document.getElementById('maskResolution').options.length>1&&
+					v!=0
+				){
+					if(userInput){
+						if(!confirm('Are you sure you want to remove the '+v+' resolution?')){
+							return;
+						}
+					}
+					document.getElementById('maskResolution').remove(document.getElementById('maskResolution').selectedIndex);
+					delete mask_editor.resolution[v];
+					document.getElementById('maskResolution').selectedIndex=0;
+					mask_editor.maskResolutionChange(userInput);
+				}
 			},
 			maskSet:function(src,dst){
 				dst.dataset.bits=src.dataset.bits;
@@ -672,6 +959,10 @@
 			mouseUp:function(){
 				mask_editor.mouseActive=false;
 				if(mask_editor.renderWaiting){
+					mask_editor.renderWaiting=false;
+					if(window.getSelection){
+						window.getSelection().removeAllRanges();
+					}
 					mask_editor.previewRender();
 				}
 			},
@@ -763,7 +1054,7 @@
 				switch(n.name){
 					case 'redo':
 						if(mask_editor.history[1].length){
-							mask_editor.history[0].push(document.getElementById('output').value);
+							mask_editor.history[0].push(mask_editor.resolution[document.getElementById('maskResolution').value]);
 							document.querySelector('.tools button[name="undo"]').disabled=false;
 							mask_editor.maskParse(mask_editor.history[1].pop());
 						}
@@ -774,10 +1065,10 @@
 					break;
 					case 'undo':
 						if(mask_editor.history[0].length){
-							mask_editor.history[1].push(document.getElementById('output').value);
+							mask_editor.history[1].push(mask_editor.resolution[document.getElementById('maskResolution').value]);
 							document.querySelector('.tools button[name="redo"]').disabled=false;
 							var mask=mask_editor.history[0].pop();
-							while(mask==document.getElementById('output').value){
+							while(mask==mask_editor.resolution[document.getElementById('maskResolution').value]){
 								mask=mask_editor.history[0].pop();
 							}
 							if(mask){
@@ -797,6 +1088,129 @@
 				mask_editor.toolPrevious=mask_editor.toolActive;
 				mask_editor.toolActive=n.name;
 			},
+			toolsToogle:function(e){
+				var n=e.target;
+				while(n.tagName.toLowerCase()!='button'){
+					n=n.parentNode;
+				}
+				n.classList.toggle('active');
+			},
+			toolsTransform:function(e,action=null){
+				if(!action){
+					action=document.getElementById('transform').value;
+				}
+				document.getElementById('transform').value='';
+				if(
+					mask_editor.history[0].length==0||
+					(
+						mask_editor.history[0][mask_editor.history[0].length-1]!=mask_editor.resolution[document.getElementById('maskResolution').value]
+					)
+				){
+					mask_editor.history[0].push(mask_editor.resolution[document.getElementById('maskResolution').value]);
+					mask_editor.history[0]=mask_editor.history[0].slice(-16);
+					mask_editor.history[1]=[];
+					document.querySelector('.tools button[name="undo"]').disabled=false;
+					document.querySelector('.tools button[name="redo"]').disabled=true;
+				}
+				var mask=mask_editor.resolution[document.getElementById('maskResolution').value].split("\n"),tmp=[];
+				tmp.push(mask.shift());
+				tmp.push(mask.shift());
+				switch(action){
+					case 'RGB2BGR':
+					case 'RGB2BRG':
+					case 'RGB2GBR':
+					case 'RGB2GRB':
+					case 'RGB2RBG':
+					case 'RGB2MYC':
+					case 'W2K':
+						var map={
+							'':[0,1,2,3,4,5,6,7],
+							'RGB2BGR':[0,4,2,5,1,3,6,7],
+							'RGB2BRG':[0,2,4,6,1,3,5,7],
+							'RGB2GBR':[0,4,1,5,2,6,3,7],
+							'RGB2GRB':[0,1,4,3,2,6,5,7],
+							'RGB2RBG':[0,2,1,6,4,5,3,7],
+							'RGB2MYC':[0,3,6,1,5,4,2,7],
+							'W2K':[7,1,2,3,4,5,6,0],
+						}[action];
+						for(var row of mask){
+							row=row.split(',');
+							row.forEach((v,k)=>{
+								v=v.split('');
+								v[0]=map[v[0]];
+								row[k]=v.join('');
+							});
+							tmp.push(row.join(','));
+						}
+						mask_editor.maskParse(tmp.join("\n"));
+					break;
+					case 'doubleV':
+						tmp[1]=tmp[1].split(',')
+						tmp[1][1]*=2;
+						if(tmp[1][1]>16){
+							alert('Aborted: The new Mask would be too large.');
+							return;
+						}
+						tmp[1]=tmp[1].join(',');
+						for(var row of mask){
+							tmp.push(row);
+							tmp.push(row);
+						}
+						mask_editor.maskParse(tmp.join("\n"));
+					break;
+					case 'doubleH':
+						mask_editor.toolsTransform(e,'rot90');
+						mask_editor.toolsTransform(e,'doubleV');
+						mask_editor.toolsTransform(e,'rot90');
+					break;
+					case 'doubleCols':
+						mask_editor.toolsTransform(e,'rot90');
+						mask_editor.toolsTransform(e,'doubleRows');
+						mask_editor.toolsTransform(e,'rot90');
+					break;
+					case 'doubleRows':
+						var count=0,prev='';
+						for(var row of mask){
+							++count;
+							tmp.push(row);
+							if(prev!=row){
+								++count;
+								tmp.push(row);
+								prev=row;
+							}
+						}
+						if(count>16){
+							alert('Aborted. The new Mask would be too large.');
+							return;
+						}
+						tmp[1]=tmp[1].split(',')
+						tmp[1][1]=count;
+						mask_editor.maskParse(tmp.join("\n"));
+					break;
+					case 'flipH':
+							for(var row of mask){
+								tmp.push(row.split(',').reverse().join(','));
+							}
+							mask_editor.maskParse(tmp.join("\n"));
+					break;
+					case 'flipV':
+							mask_editor.maskParse(tmp.concat(mask.reverse()).join("\n"));
+					break;
+					case 'rot90':
+						tmp[1]=tmp[1].split(',').reverse().join(',');
+						mask.forEach((v,k)=>{
+							mask[k]=v.split(',');
+						});
+						mask=Object.keys(mask[0]).map(function(c) {
+							return mask.map(function(r) { return r[c]; });
+						});
+						mask.forEach((v,k)=>{
+							mask[k]=v.join(',');
+						});
+						mask_editor.maskParse(tmp.concat(mask).join("\n"));
+					break;
+				}
+			},
 		};
 		window.addEventListener('load',function(){
 			mask_editor.init();
@@ -805,7 +1219,12 @@
 </head>
 <body>
 	<h1>MiSTer - Shadow Mask Editor</h1>
-	<div style="display:grid;grid-template-columns:auto auto auto;">
+	<div style="display:grid;grid-template-columns:auto auto auto auto;">
+		<div>
+			<h2>Load Mask</h2>
+			<div><input type="file" id="maskFile" name="maskFile" accept="text/plain"></div>
+			<div><input id="maskFileUseResolution" type="checkbox"><label for="maskFileUseResolution" style="width:auto;">Use selected resolution.</label></div>
+		</div>
 		<div class="properties">
 			<h2>Properties</h2>
 			<div>
@@ -845,13 +1264,17 @@
 					<input disabled="disabled" type="radio" name="background" id="backgroundFile" value="image"><label for="backgroundFile">Image</label><br>&nbsp;
 				</div>
 				<div style="display:inline-block;">
-					<input type="file" name="backgroundFile" accept="image/*"><br>
-					<input id="backgroundResizePreview" type="checkbox"><label style="width:auto;" for="backgroundResizePreview">Resize Preview</label>
+					<input type="file" name="backgroundFile" accept="image/*">
+					<div>
+						<label for="backgroundScale">ScaleX</label>
+						<input id="backgroundScale" type="number" min="1" max="64" value="1">
+						<input id="backgroundResizePreview" type="checkbox"><label style="width:auto;" for="backgroundResizePreview">Resize Preview</label>
+					</div>
 				</div>
 			</div>
 		</div>
 	</div>
-	<div style="display:grid;grid-template-columns:auto auto auto;">
+	<div style="display:grid;grid-template-columns:auto auto auto auto;">
 		<div>
 			<table class="tools">
 				<tr>
@@ -883,6 +1306,7 @@
 			</table>
 		</div>
 		<div>
+			<span id="activeEncode">72a</span>
 			<div id="activeColor" data-bits='111' data-code="7" data-intensity="62.5,112.5" style="background-color:hsl(0,0%,56.25%);" title="Active Colour"><div style="background-color:hsl(0,0%,46.875%);"></div></div>
 			<div class="intensity">
 				<input id="intensityOn" type="range" min="100" max="193.75" step="6.25" value="112.5" title="&quot;On&quot; Intensity"><div>112.5</div>
@@ -901,23 +1325,127 @@
 				</tr>
 			</table>
 		</div>
+		<div class="toolsMask">
+			<div>
+				<button id="mirrorV" name="mirrorV" title="Mirror Input Vertically"><svg width="24" height="24" version="1.1" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><g transform="translate(3.2712 -1037.1)"><g transform="matrix(0 -.99876 1 0 -1039.6 1053.1)"><g><g><path d="m7.043 1036.4v16h1.9141v-16z" style="color-rendering:auto;color:#000000;dominant-baseline:auto;fill-rule:evenodd;font-feature-settings:normal;font-variant-alternates:normal;font-variant-caps:normal;font-variant-ligatures:normal;font-variant-numeric:normal;font-variant-position:normal;image-rendering:auto;isolation:auto;mix-blend-mode:normal;shape-padding:0;shape-rendering:auto;solid-color:#000000;text-decoration-color:#000000;text-decoration-line:none;text-decoration-style:solid;text-indent:0;text-orientation:mixed;text-transform:none;white-space:normal"/><path d="m0 1038.4c-0.044521 4.1443 0 6 0 6s0.020814 2.9749 0 6c-0.0069811 1.0146 1 1 1 1h4v-1h-4v-12h4v-1h-4s-0.98944 0.017-1 1z" style="color-rendering:auto;color:#000000;fill-rule:evenodd;image-rendering:auto;isolation:auto;mix-blend-mode:normal;paint-order:stroke fill markers;shape-rendering:auto;solid-color:#000000;text-decoration-color:#000000;text-decoration-line:none;text-decoration-style:solid;text-indent:0;text-transform:none;white-space:normal"/><rect x="12.996" y="1050.4" width="1.0012" height="1"/><rect x="10.994" y="1050.4" width="1.0012" height="1"/><rect x="14.999" y="1048.4" width="1.0012" height="1"/><rect x="14.999" y="1039.4" width="1.0012" height="1"/><rect x="12.996" y="1037.4" width="1.0012" height="1"/><rect x="10.994" y="1037.4" width="1.0012" height="1"/></g><path d="m15 1050.4 0.01367 1h0.24805c0.40619-0.0072 0.73828-0.3437 0.73828-0.75v-0.25h-0.25z" style="color-rendering:auto;color:#000000;dominant-baseline:auto;font-feature-settings:normal;font-variant-alternates:normal;font-variant-caps:normal;font-variant-ligatures:normal;font-variant-numeric:normal;font-variant-position:normal;image-rendering:auto;isolation:auto;mix-blend-mode:normal;paint-order:stroke fill markers;shape-padding:0;shape-rendering:auto;solid-color:#000000;text-decoration-color:#000000;text-decoration-line:none;text-decoration-style:solid;text-indent:0;text-orientation:mixed;text-transform:none;white-space:normal"/><path d="m15 1038.4 0.01367-1h0.24805c0.40619 0.01 0.73828 0.3419 0.73828 0.7481v0.248h-0.25z" style="color-rendering:auto;color:#000000;dominant-baseline:auto;font-feature-settings:normal;font-variant-alternates:normal;font-variant-caps:normal;font-variant-ligatures:normal;font-variant-numeric:normal;font-variant-position:normal;image-rendering:auto;isolation:auto;mix-blend-mode:normal;paint-order:stroke fill markers;shape-padding:0;shape-rendering:auto;solid-color:#000000;text-decoration-color:#000000;text-decoration-line:none;text-decoration-style:solid;text-indent:0;text-orientation:mixed;text-transform:none;white-space:normal"/></g><path transform="matrix(.93275 .37141 -.42883 .80786 458.66 187.61)" d="m12.146 1058.7-6.7205-0.6089 1.9438-2.7579 1.9438-2.7578 1.4165 3.0623z"/></g></g></svg></button>
+				<button id="mirrorH" name="mirrorH" title="Mirror Input Horizontally"><svg width="24" height="24" version="1.1" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><g transform="translate(1.2382 -1037.7)"><g transform="matrix(.99876 0 0 1 -1.2185 1.3718)"><g><g><path d="m7.043 1036.4v16h1.9141v-16z" style="color-rendering:auto;color:#000000;dominant-baseline:auto;fill-rule:evenodd;font-feature-settings:normal;font-variant-alternates:normal;font-variant-caps:normal;font-variant-ligatures:normal;font-variant-numeric:normal;font-variant-position:normal;image-rendering:auto;isolation:auto;mix-blend-mode:normal;shape-padding:0;shape-rendering:auto;solid-color:#000000;text-decoration-color:#000000;text-decoration-line:none;text-decoration-style:solid;text-indent:0;text-orientation:mixed;text-transform:none;white-space:normal"/><path d="m0 1038.4c-0.044521 4.1443 0 6 0 6s0.020814 2.9749 0 6c-0.0069811 1.0146 1 1 1 1h4v-1h-4v-12h4v-1h-4s-0.98944 0.017-1 1z" style="color-rendering:auto;color:#000000;fill-rule:evenodd;image-rendering:auto;isolation:auto;mix-blend-mode:normal;paint-order:stroke fill markers;shape-rendering:auto;solid-color:#000000;text-decoration-color:#000000;text-decoration-line:none;text-decoration-style:solid;text-indent:0;text-transform:none;white-space:normal"/><rect x="12.996" y="1050.4" width="1.0012" height="1"/><rect x="10.994" y="1050.4" width="1.0012" height="1"/><rect x="14.999" y="1048.4" width="1.0012" height="1"/><rect x="14.999" y="1039.4" width="1.0012" height="1"/><rect x="12.996" y="1037.4" width="1.0012" height="1"/><rect x="10.994" y="1037.4" width="1.0012" height="1"/></g><path d="m15 1050.4 0.01367 1h0.24805c0.40619-0.0072 0.73828-0.3437 0.73828-0.75v-0.25h-0.25z" style="color-rendering:auto;color:#000000;dominant-baseline:auto;font-feature-settings:normal;font-variant-alternates:normal;font-variant-caps:normal;font-variant-ligatures:normal;font-variant-numeric:normal;font-variant-position:normal;image-rendering:auto;isolation:auto;mix-blend-mode:normal;paint-order:stroke fill markers;shape-padding:0;shape-rendering:auto;solid-color:#000000;text-decoration-color:#000000;text-decoration-line:none;text-decoration-style:solid;text-indent:0;text-orientation:mixed;text-transform:none;white-space:normal"/><path d="m15 1038.4 0.01367-1h0.24805c0.40619 0.01 0.73828 0.3419 0.73828 0.7481v0.248h-0.25z" style="color-rendering:auto;color:#000000;dominant-baseline:auto;font-feature-settings:normal;font-variant-alternates:normal;font-variant-caps:normal;font-variant-ligatures:normal;font-variant-numeric:normal;font-variant-position:normal;image-rendering:auto;isolation:auto;mix-blend-mode:normal;paint-order:stroke fill markers;shape-padding:0;shape-rendering:auto;solid-color:#000000;text-decoration-color:#000000;text-decoration-line:none;text-decoration-style:solid;text-indent:0;text-orientation:mixed;text-transform:none;white-space:normal"/></g><path transform="matrix(.93275 .37141 -.42883 .80786 458.66 187.61)" d="m12.146 1058.7-6.7205-0.6089 1.9438-2.7579 1.9438-2.7578 1.4165 3.0623z"/></g></g></svg></button>
+			</div>
+			<div>
+				<label for="transform">Transform</label><br>
+				<select id="transform" style="width:75px;">
+					<option value="">Select:</option>
+					<optgroup label="Position">
+						<option value="flipV">Flip Mask Vertically</option>
+						<option value="flipH">Flip Mask Horizontally</option>
+						<option value="rot90">Rotate Mask 90&deg;</option>
+					</optgroup>
+					<optgroup label="Size">
+						<option value="doubleV">Scale 1x2</option>
+						<option value="doubleH">Scale 2x1</option>
+						<option value="doubleRows">Scale Unique 1x2</option>
+						<option value="doubleCols">Scale Unique 2x1</option>
+					</optgroup>
+					<optgroup label="Sub-pixel Layouts">
+						<option value="RGB2BGR">RGB &lt;-&gt; BGR</option>
+						<option value="RGB2BRG">RGB &lt;-&gt; BRG</option>
+						<option value="RGB2GBR">RGB &lt;-&gt; GBR</option>
+						<option value="RGB2GRB">RGB &lt;-&gt; GRB</option>
+						<option value="RGB2RBG">RGB &lt;-&gt; RBG</option>
+					</optgroup>
+					<optgroup label="Color">
+						<option value="RGB2MYC">RGB &lt;-&gt; MYC</option>
+						<option value="W2K">W &lt;-&gt; K</option>
+					</optgroup>
+				</select>
+			</div>
+		</div>
 	</div>
-	<div style="display:grid;grid-template-columns:auto auto;">
-		<div>
+	<div style="display:grid;grid-gap:0px 10px;grid-template-columns:auto auto;">
+		<div style="grid-row:1;">
 			<h2>Mask</h2>
+		</div>
+		<div style="grid-row:1;">
+			<h2>Preview</h2>
+		</div>
+		<div style="grid-row:2/4;">
 			<div id="mask"></div>
 		</div>
-		<div class="preview">
-			<h2>Preview</h2>
+		<div class="preview" style="grid-row:2;overflow-x:auto;">
 			<canvas id="previewCanvas" width="300" height="300"></canvas>
-			<div><input id="previewWidth" type="number" value="300">x<input id="previewHeight" type="number" value="300"></div>
+		</div>
+		<div class="preview" style="grid-row:3;">
+			<input id="previewWidth" type="number" value="300">x<input id="previewHeight" type="number" value="300">
 		</div>
 	</div>
-	<div style="display:grid;grid-template-columns:auto auto;">
-		<div>
-			<h2>Mask Definition</h2>
+	<div style="display:grid;grid-gap:10px;grid-template-columns:49% auto%;">
+		<div class="maskDetails" style="grid-row:1;">
+			<h2>Details</h2>
 			<div>
-				<textarea id="output" readonly="readonly" onclick="this.focus();this.select()"></textarea>
+				<label for="maskName">Name</label><input type="text" id="maskName" name="maskName" placeholder="Lo-Tek PVM-1995">
+			</div>
+			<div>
+				<label for="maskAuthor">Author</label><input type="text" id="maskAuthor" name="maskAuthor" placeholder="Johnny Mnemonic">
+			</div>
+			<div>
+				<label for="maskType">Type</label><select id="maskType" name="maskType">
+					<option value="">Select:</option>
+					<option value="CRT">CRT</option>
+					<option value="LCD">LCD</option>
+					<option value="LED">LED</option>
+					<option value="Other">Other</option>
+				</select>
+			</div>
+			<div>
+				<label for="maskGenre">Genre</label><input type="text" id="maskGenre" name="maskGenre" list="maskGenres" placeholder="Realistic">
+				<datalist id="maskGenres">
+					<option value="BVM">
+					<option value="Bright">
+					<option value="Dark">
+					<option value="Fantasy">
+					<option value="Generic">
+					<option value="Geometric">
+					<option value="Handheld">
+					<option value="JVC">
+					<option value="Mosaic">
+					<option value="Neutral">
+					<option value="PVM">
+					<option value="Realistic">
+					<option value="Slot Mask">
+					<option value="Tinted">
+					<option value="VGA">
+				</datalist>
+			</div>
+			<div>
+				<label for="maskSubPixelLayout">Layout</label><select id="maskSubPixelLayout" name="maskSubPixelLayout">
+					<option value="">Select:</option>
+					<option value="Monochrome">Monochrome</option>
+					<option value="BGR">BGR</option>
+					<option value="BRG">BRG</option>
+					<option value="GBR">GBR</option>
+					<option value="GRB">GRB</option>
+					<option value="RBG">RBG</option>
+					<option value="RGB">RGB</option>
+				</select>
+			</div>
+			<div>
+				<br><label for="maskInformation">Information</label><br><input type="text" id="maskInformation" name="maskInformation" placeholder="Replicates nerve attenuation syndrome.">
+			</div>
+		</div>
+		<div class="maskResolutions" style="grid-row:2;">
+			<h2>Resolutions</h2>
+			<label for="maskResolution">Min Height</label>
+			<div style="display:inline-block;">
+				<select id="maskResolution" name="maskResolution" size="6" style="width:100%;">
+					<option value="0" selected="selected">0</option>
+				</select><br>
+				<input type="number" min="0" max="2160" name="Height" value="1080"> <button>Add</button>
+			</div>
+		</div>
+		<div class="maskDefinition" style="grid-row:1/3;">
+			<h2>Definition</h2>
+			<div>
+				<textarea id="output" readonly="readonly" onclick="this.focus();this.select()"></textarea><br>
+				<button>Download</button>
 			</div>
 			<h2>Instructions</h2>
 			<ol>
@@ -925,10 +1453,6 @@
 				<li>Copy &amp; paste the above Mask Definition into a new text file (*.txt) inside of the Shadow_Masks folder.</li>
 				<li>Select your Mask from the MiSTer GUI.</li>
 			</ol>
-		</div>
-		<div>
-			<h2>Load Mask</h2>
-			<input type="file" name="maskFile" accept="text/plain">
 		</div>
 	</div>
 	<div class="help">
@@ -977,9 +1501,17 @@
 			<dt>Reset <kbd>Esc</kbd></dt>
 			<dd>Revert changes to defaults.</dd>
 		</dl>
+		<h2>Resolution Controls</h2>
+		<dl>
+			<dt>Add <kbd>+</kbd></dt>
+			<dd>Create entry for resolution.</dd>
+			<dt>Minus <kbd>-</kbd> <kbd>Delete</kbd> <kbd>Backspace</kbd></dt>
+			<dd>Remove selected resolution.</dd>
+		</dl>
 		<h2>Miscellaneous</h2>
 		<dl>
 			<dt>Toogle Preview Type <kbd>`</kbd></dt>
+			<dt>Download Definition <kbd>Ctrl+Shift+S</kbd></dt>
 		</dl>
 	</div>
 	<div class="help">
